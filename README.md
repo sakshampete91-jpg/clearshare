@@ -260,7 +260,12 @@ CLEARSHARE is designed around strict client-side trust boundaries:
 - **Defense against unsafe inputs:** File magic-byte validation, bounded custom regex execution (`ReDoS` prevention), CSV formula neutralization, and masked diagnostic previews.
 - **Automated repository security checks:** GitHub Actions runs CI secret hygiene (`npm audit`, `.env`/credential pattern rejection) alongside CodeQL and Pull Request Dependency Review.
 
-Read the full threat model and known limitations in [`docs/SECURITY.md`](docs/SECURITY.md).
+Read the full security and privacy documentation suite:
+- [`docs/SECURITY.md`](docs/SECURITY.md) — Data classification, HTTP headers & implemented controls
+- [`docs/PRIVACY.md`](docs/PRIVACY.md) — End-to-end client-only data-flow map & erasure lifecycle
+- [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md) — Threat matrix, severities, mitigations & residual risks
+- [`docs/FIREBASE-SECURITY.md`](docs/FIREBASE-SECURITY.md) — Infrastructure inventory (no Firebase/GCP) & pre-adoption gates
+- [`docs/INCIDENT-RESPONSE.md`](docs/INCIDENT-RESPONSE.md) — Credential & document-exposure response runbooks
 
 ---
 

@@ -129,15 +129,11 @@ export const ExportReportingPage: React.FC = () => {
 
     if (format === 'json') {
       const jsonText = JSON.stringify(report, null, 2);
-      const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'clearshare-privacy-report.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadSanitizedFile(
+        jsonText,
+        'clearshare-privacy-report.json',
+        'application/json;charset=utf-8'
+      );
       logAction('Privacy report exported', 'Downloaded clearshare-privacy-report.json (no PII)');
       return;
     }

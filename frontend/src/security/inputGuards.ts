@@ -84,8 +84,14 @@ export function buildSafeAppError(
   originalPreserved = true
 ): AppErrorInfo {
   const rawMessage = err instanceof Error ? err.message : 'Unexpected local processing error.';
+  // Normalize whitespace and redact any accidental email or token-shaped literals before rendering
+  const sanitized = rawMessage
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[redacted-email]')
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|AIza[0-9A-Za-z_-]{16,}|gh[pousr]_[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{12,})\b/g, '[redacted-token]')
+    .trim();
   const safeMessage =
-    rawMessage.length > 180 ? `${rawMessage.slice(0, 177)}...` : rawMessage;
+    sanitized.length > 180 ? `${sanitized.slice(0, 177)}...` : sanitized || 'Unexpected local processing error.';
 
   return {
     id: generateSecureId('err'),

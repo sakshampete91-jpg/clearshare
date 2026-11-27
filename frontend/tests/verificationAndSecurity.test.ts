@@ -175,6 +175,17 @@ describe('Verification, Security, & Edge Cases', () => {
     expect(generateSecureId('req')).toMatch(/^req-[0-9a-z-]+$/i);
 
     const syntheticGoogleKey = ['AIza', 'Synthetic00DemoKey00Clearshare00001'].join('');
+    const leakErr = buildSafeAppError(
+      'Upload',
+      new Error(`Failed near leak@example.org with token ${syntheticGoogleKey}\nline2`),
+      'Retry'
+    );
+    expect(leakErr.whatHappened).not.toContain('leak@example.org');
+    expect(leakErr.whatHappened).not.toContain(syntheticGoogleKey);
+    expect(leakErr.whatHappened).toContain('[redacted-email]');
+    expect(leakErr.whatHappened).toContain('[redacted-token]');
+    expect(leakErr.whatHappened).not.toContain('\n');
+
     const result = runPrivacyPipeline({
       text: `Config token: ${syntheticGoogleKey}`,
       source: { kind: 'txt', fileName: 'C:\\temp\\config.txt' },

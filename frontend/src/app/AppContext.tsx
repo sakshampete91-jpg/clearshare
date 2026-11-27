@@ -636,6 +636,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRedactionResult(null);
     setSimulationResult(null);
     setSimulationHistory([]);
+    setLocalSessions([]);
     setVerificationStatus('Not yet analysed');
     setVerificationReport(null);
     setAppError(null);

@@ -60,7 +60,7 @@ function clampExtractedText(text: string): { text: string; truncated: boolean } 
 
 export async function extractPdfTextFromBuffer(
   buffer: ArrayBuffer,
-  options?: { disableWorker?: boolean }
+  _options?: { disableWorker?: boolean }
 ): Promise<{ text: string; notice?: string }> {
   const bytes = new Uint8Array(buffer);
   const header = String.fromCharCode(...bytes.slice(0, 5));
@@ -70,7 +70,8 @@ export async function extractPdfTextFromBuffer(
 
   const loadingTask = pdfjsLib.getDocument({
     data: bytes,
-    ...(options?.disableWorker ? { useWorkerFetch: false, isEvalSupported: false } : {}),
+    useSystemFonts: false,
+    useWorkerFetch: false,
   });
 
   let pdfDoc: Awaited<typeof loadingTask.promise> | null = null;

@@ -14,18 +14,22 @@ export function buildSafeExportFileName(
 export function downloadSanitizedFile(
   content: string,
   fileName: string,
-  mimeType: 'text/plain;charset=utf-8' | 'text/csv;charset=utf-8'
+  mimeType: 'text/plain;charset=utf-8' | 'text/csv;charset=utf-8' | 'application/json;charset=utf-8'
 ): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = fileName;
+  anchor.rel = 'noopener';
   anchor.style.display = 'none';
   document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  try {
+    anchor.click();
+  } finally {
+    document.body.removeChild(anchor);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
 
 export async function copyTextToClipboard(content: string): Promise<boolean> {
