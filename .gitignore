@@ -16,6 +16,10 @@ coverage/
 # Logs
 *.log
 npm-debug.log*
+firebase-debug*.log
+
+# Firebase local cache
+.firebase/
 
 # Python / Tooling Artifacts
 __pycache__/
