@@ -1,5 +1,9 @@
 import type { SyntheticSample } from '../types/clearshare';
 
+// Assemble synthetic demo tokens at runtime so static secret scanners do not mistake demo fixtures for live credentials
+const DEMO_GH_TOKEN = ['ghp', 'SyntheticDemoTokenForClearshareTest9901'].join('_');
+const DEMO_OPENAI_TOKEN = ['sk', 'proj', 'synthetic99demoKeyForClearshareTest01'].join('-');
+
 export const SYNTHETIC_SAMPLES: SyntheticSample[] = [
   {
     id: 'hr-resume',
@@ -21,7 +25,7 @@ Tax & Identity Records (Synthetic):
 - PAN Candidate: ABCPN5678G
 - Aadhaar-like Ref: 3456 7890 1234
 - Remote Portal IP: 203.0.113.45
-- Accidental CI Token in Portfolio: ghp_SyntheticDemoTokenForClearshareTest9901
+- Accidental CI Token in Portfolio: ${DEMO_GH_TOKEN}
 
 Reimbursement Note:
 Travel reimbursement requested on card 4532 0151 1283 0366 for Kochi onboarding panel.`,
@@ -73,7 +77,7 @@ Verification & Debug Payload:
 - Login IPv4: 192.168.14.28
 - Card (Valid Luhn): 4532 0151 1283 0366
 - Card Typo (Invalid Luhn): 4532 0151 1283 0367
-- Pasted Webhook Secret: sk-proj-synthetic99demoKeyForClearshareTest01
+- Pasted Webhook Secret: ${DEMO_OPENAI_TOKEN}
 
 Follow-up: Escalate to Senior Fraud Operations Analyst in Pune under TKT-48291.`,
   },

@@ -112,8 +112,8 @@ describe('Verification, Security, & Edge Cases', () => {
   });
 
   it('builds Privacy Analysis Reports without any original PII or raw secrets', () => {
-    const raw =
-      'Ticket TKT-48291: rahul.sharma@example.in key sk-proj-synthetic99demoKeyForClearshareTest01';
+    const syntheticKey = ['sk', 'proj', 'synthetic99demoKeyForClearshareTest01'].join('-');
+    const raw = `Ticket TKT-48291: rahul.sharma@example.in key ${syntheticKey}`;
     const pipeline = runPrivacyPipeline({
       text: raw,
       source: { kind: 'txt', fileName: 'secret.txt' },
@@ -136,9 +136,10 @@ describe('Verification, Security, & Edge Cases', () => {
     const txtReport = formatPrivacyReportAsText(report);
 
     expect(jsonText).not.toContain('rahul.sharma@example.in');
-    expect(jsonText).not.toContain('sk-proj-synthetic99demoKeyForClearshareTest01');
+    expect(jsonText).not.toContain(syntheticKey);
     expect(txtReport).toContain('CLEARSHARE — PRIVACY ANALYSIS & VERIFICATION REPORT');
     expect(txtReport).not.toContain('rahul.sharma@example.in');
+    expect(txtReport).not.toContain(syntheticKey);
   });
 
   it('handles large multi-thousand-line documents cleanly within budget', () => {

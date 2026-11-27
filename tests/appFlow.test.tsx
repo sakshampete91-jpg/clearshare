@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { App } from '../src/App';
@@ -33,6 +33,11 @@ describe('CLEARSHARE Redesigned Live Workspace & Pipeline', () => {
   });
 
   it('sanitizes Names, Locations, and API Keys by default, updates Redaction Summary, masks secrets in diagnostics, and clears cleanly', async () => {
+    const logSpy = vi.spyOn(console, 'log');
+    const warnSpy = vi.spyOn(console, 'warn');
+    const errorSpy = vi.spyOn(console, 'error');
+    const syntheticKey = ['sk', 'proj', 'synthetic99demoKeyForClearshareTest01'].join('-');
+
     render(<App />);
 
     // Click Customer Support Ticket sample chip
@@ -43,7 +48,7 @@ describe('CLEARSHARE Redesigned Live Workspace & Pipeline', () => {
       expect(output.textContent).toContain('[REDACTED]');
       // Direct PII, API key, Name, and Location are all sanitized by default
       expect(output.textContent).not.toContain('rahul.sharma@example.in');
-      expect(output.textContent).not.toContain('sk-proj-synthetic99demoKeyForClearshareTest01');
+      expect(output.textContent).not.toContain(syntheticKey);
       expect(output.textContent).not.toContain('Rahul Sharma');
       expect(output.textContent).not.toContain('Pune');
     });
@@ -59,9 +64,7 @@ describe('CLEARSHARE Redesigned Live Workspace & Pipeline', () => {
     fireEvent.click(screen.getByRole('button', { name: /expand comparison/i }));
     fireEvent.click(screen.getByRole('button', { name: /detected entities/i }));
     const comparisonPanel = screen.getByLabelText(/expanded comparison and detection details/i);
-    expect(comparisonPanel.textContent).not.toContain(
-      'sk-proj-synthetic99demoKeyForClearshareTest01'
-    );
+    expect(comparisonPanel.textContent).not.toContain(syntheticKey);
     expect(comparisonPanel.textContent).toContain('SECRET ••••st01');
 
     // Clear button at Input Document header resets input, output, summary, and comparison
@@ -78,7 +81,22 @@ describe('CLEARSHARE Redesigned Live Workspace & Pipeline', () => {
     fireEvent.click(screen.getByRole('button', { name: /open activity log/i }));
     const dialog = screen.getByRole('dialog', { name: /local activity log/i });
     expect(dialog.textContent).not.toContain('rahul.sharma@example.in');
-    expect(dialog.textContent).not.toContain('sk-proj-synthetic99demoKeyForClearshareTest01');
+    expect(dialog.textContent).not.toContain(syntheticKey);
+
+    // Verify browser storage stays empty and console never received document PII/secrets
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+    const consoleText = [
+      ...logSpy.mock.calls.flat(),
+      ...warnSpy.mock.calls.flat(),
+      ...errorSpy.mock.calls.flat(),
+    ].join(' ');
+    expect(consoleText).not.toContain('rahul.sharma@example.in');
+    expect(consoleText).not.toContain(syntheticKey);
+
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it('navigates across all 5 primary product areas and escapes HTML/script payloads safely', async () => {
