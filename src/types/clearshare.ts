@@ -1,10 +1,3 @@
-export type ScreenId =
-  | 'workspace'
-  | 'analysis'
-  | 'simulator'
-  | 'comparison'
-  | 'export';
-
 export type EntityCategory =
   | 'EMAIL'
   | 'PHONE'

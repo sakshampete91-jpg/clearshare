@@ -3,14 +3,11 @@ import { X, Info, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react'
 import { AppProvider, useApp } from './app/AppContext';
 import { TopNav } from './components/layout/TopNav';
 import { ActivityLogDrawer } from './components/layout/ActivityLogDrawer';
+import { InfoModal } from './components/layout/InfoModal';
 import { Workspace } from './pages/Workspace';
-import { AnalysisStudio } from './pages/AnalysisStudio';
-import { ExposureSimulator } from './pages/ExposureSimulator';
-import { ComparisonStudio } from './pages/ComparisonStudio';
-import { ReviewExport } from './pages/ReviewExport';
 
-const ScreenRouter: React.FC = () => {
-  const { activeScreen, statusBanner, clearStatusBanner } = useApp();
+const WorkspaceShell: React.FC = () => {
+  const { statusBanner, clearStatusBanner } = useApp();
 
   const bannerStyles = {
     info: {
@@ -32,15 +29,15 @@ const ScreenRouter: React.FC = () => {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-[1440px] px-4 py-3 sm:px-6">
       {statusBanner && (
         <div
           role="status"
-          className={`mb-5 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${bannerStyles[statusBanner.kind].bg}`}
+          className={`mb-3 flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2 text-xs font-medium ${bannerStyles[statusBanner.kind].bg}`}
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             {React.createElement(bannerStyles[statusBanner.kind].Icon, {
-              className: 'h-4 w-4 shrink-0',
+              className: 'h-3.5 w-3.5 shrink-0',
               'aria-hidden': true,
             })}
             <span>{statusBanner.message}</span>
@@ -49,37 +46,38 @@ const ScreenRouter: React.FC = () => {
             type="button"
             onClick={clearStatusBanner}
             aria-label="Dismiss notification"
-            className="cs-focus-ring rounded-md p-1 hover:bg-[#26352D]/10"
+            className="cs-focus-ring rounded p-1 hover:bg-[#26352D]/10"
           >
-            <X className="h-4 w-4" aria-hidden="true" />
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
       )}
 
-      {activeScreen === 'workspace' && <Workspace />}
-      {activeScreen === 'analysis' && <AnalysisStudio />}
-      {activeScreen === 'simulator' && <ExposureSimulator />}
-      {activeScreen === 'comparison' && <ComparisonStudio />}
-      {activeScreen === 'export' && <ReviewExport />}
+      <Workspace />
     </main>
   );
 };
 
 export const App: React.FC = () => {
   const [logOpen, setLogOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   return (
     <AppProvider>
       <div className="min-h-screen bg-[#F5F0E6] text-[#26352D]">
-        <TopNav onOpenLog={() => setLogOpen(true)} />
-        <ScreenRouter />
-        <footer className="mx-auto max-w-7xl border-t border-[#E8E2D8] px-4 py-5 text-xs text-[#5B6058] sm:px-6 lg:px-8">
+        <TopNav
+          onOpenLog={() => setLogOpen(true)}
+          onOpenInfo={() => setInfoOpen(true)}
+        />
+        <WorkspaceShell />
+        <footer className="mx-auto max-w-[1440px] px-4 pb-4 pt-1 text-[11px] text-[#5B6058] sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>CLEARSHARE — Client-Side Privacy Intelligence & Exposure Simulation</span>
-            <span>No server uploads · Memory-only processing · Not a guarantee of anonymity</span>
+            <span>CLEARSHARE — Memory-only browser workspace · Zero external transmission</span>
+            <span>Exposure indicators are rule-based and do not guarantee anonymity</span>
           </div>
         </footer>
         <ActivityLogDrawer open={logOpen} onClose={() => setLogOpen(false)} />
+        <InfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
       </div>
     </AppProvider>
   );

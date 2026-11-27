@@ -1,8 +1,10 @@
 import Papa from 'papaparse';
 import type {
   ContextClue,
+  ContextClueCategory,
   CsvGrid,
   DetectedEntity,
+  EntityCategory,
   SanitizationMode,
 } from '../../types/clearshare';
 import { detectEntities } from '../detection/detectEntities';
@@ -61,7 +63,9 @@ export function processCsvDocument(
   mode: SanitizationMode,
   customPhrases: string[] = [],
   additionalRedactionValues: string[] = [],
-  fileName = 'document.csv'
+  fileName = 'document.csv',
+  enabledDirectCategories?: EntityCategory[],
+  enabledContextCategories?: ContextClueCategory[]
 ): CsvProcessingResult {
   const originalGrid = parseCsvToGrid(rawCsv, fileName);
   const registry = new InMemoryPseudonymRegistry();
@@ -74,6 +78,12 @@ export function processCsvDocument(
   const additionalSet = new Set(
     additionalRedactionValues.map((v) => v.trim().toLowerCase()).filter(Boolean)
   );
+  const directEnabledSet = enabledDirectCategories
+    ? new Set(enabledDirectCategories)
+    : null;
+  const contextEnabledSet = enabledContextCategories
+    ? new Set(enabledContextCategories)
+    : null;
 
   const sanitizedRows: string[][] = [];
 
@@ -97,6 +107,10 @@ export function processCsvDocument(
       });
       allEntities.push(...cellDetection.entities);
 
+      const entitiesToRedact = directEnabledSet
+        ? cellDetection.entities.filter((e) => directEnabledSet.has(e.category))
+        : cellDetection.entities;
+
       const cellClues = detectContextClues(cellValue, customPhrases).map((clue) => ({
         ...clue,
         rowIndex: r + 1,
@@ -105,13 +119,16 @@ export function processCsvDocument(
       }));
       allClues.push(...cellClues);
 
-      const cluesToRedact = cellClues.filter((clue) =>
-        additionalSet.has(clue.normalizedValue) || additionalSet.has(clue.value.toLowerCase())
+      const cluesToRedact = cellClues.filter(
+        (clue) =>
+          (contextEnabledSet ? contextEnabledSet.has(clue.category) : false) ||
+          additionalSet.has(clue.normalizedValue) ||
+          additionalSet.has(clue.value.toLowerCase())
       );
 
       const cellRedaction = sanitizeText(
         cellValue,
-        cellDetection.entities,
+        entitiesToRedact,
         mode,
         cluesToRedact,
         registry

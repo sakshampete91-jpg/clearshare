@@ -8,36 +8,23 @@ CLEARSHARE is a **client-side Privacy Intelligence & Exposure Simulation Platfor
 
 ## Key Features
 
-1. **Main Workspace**
-   - Paste text directly, upload `.txt` or `.csv` files, or load three built-in synthetic datasets (*Customer Support Ticket*, *Software Bug Report*, *Recruitment Document CSV*).
-   - Add optional custom sensitive phrases.
-   - Choose between three sanitization modes (**Full Mask**, **Partial Mask**, **Consistent Pseudonymization**).
+1. **Compact Live Two-Column Workspace**
+   - Paste text directly, drag-and-drop/upload `.txt` or `.csv` files, or load three built-in synthetic chips (**HR Resume**, **Medical Note**, **Customer Support Ticket**).
+   - Instant debounced analysis updates the sanitized output and Privacy Exposure Meter automatically as you edit or toggle settings.
+   - Choose between three sanitization modes (**Full Mask**, **Partial Mask**, **Consistent Pseudonymization**) and toggle granular protection categories (**Emails**, **Phone Numbers**, **IP Addresses**, **PAN**, **Aadhaar-like**, **Cards**, **Names**, **Locations**, **Custom Phrases**).
 
-2. **Document Analysis Studio**
-   - Detects six mandatory identifier categories with boundary-aware regular expressions and validators:
-     - **Email addresses** (structural validation)
-     - **Indian mobile numbers** (10-digit with optional `+91`/`91`, spaces, hyphens, parentheses; normalized for deduplication)
-     - **IPv4 addresses** (strict `0–255` octet validation; rejects out-of-range strings)
-     - **Indian PAN candidates** (structure & category letter check; explicitly states format check does not verify government issuance)
-     - **Aadhaar-like 12-digit candidates** (boundary and formatting checks; explicitly not UIDAI-verified)
-     - **Payment card candidates** (13–19 digits with **Luhn checksum** separation between valid and invalid checksums; explicitly not proof of active/genuine card)
-   - Resolves overlapping matches deterministically and tracks exact character offsets.
+2. **Hero Privacy Exposure Simulator**
+   - Prominently positioned above the sanitized output panel.
+   - Runs an **independent second scan** on the sanitized document to report exposure level (**Low**, **Moderate**, **High**), remaining direct identifiers, indirect contextual clues, **potential linkability** combinations, and one-click clue recommendations.
+   - Expandable **Inspect Evidence** view reveals the rule-based score breakdown, all contextual clues, and linkability explanations without claiming statistical certainty or guaranteed anonymity.
 
-3. **Privacy Exposure Simulator (Flagship Differentiator)**
-   - Runs an **independent second scan** on the sanitized document.
-   - Identifies any remaining direct identifiers and deterministic indirect contextual clues (person names, locations, specific dates, organizations, ticket/account references, repeated IDs, and `Uncertain` clues such as specific job titles).
-   - Evaluates **potential linkability** (e.g., *Location + Specific Date*, *Unique Ticket Reference + Context*, *Person Name + Organization*).
-   - Computes a transparent, rule-based exposure assessment (**Low**, **Moderate**, or **High Exposure**) with point breakdowns and an explicit disclaimer that it is not a statistical probability of re-identification.
-   - Supports interactive clue recommendations and **re-simulation** with before-vs-after comparison.
+3. **Expandable Comparison & Entity Validation**
+   - Toggle **Expand Comparison** below the workspace for side-by-side Original vs. Sanitized highlighting, removed/remaining counts, and synchronized scrolling.
+   - Switch to the **Detected Entities** tab inside the drawer to inspect exact character offsets, duplicate normalization counts, PAN/Aadhaar format disclaimers, Luhn checksum separation, and validation warnings.
 
-4. **Comparison Studio**
-   - Side-by-side Original vs. Sanitized document comparison with category-specific highlighting, synchronized scrolling, and live removed/remaining counts.
-
-5. **Review & Safe Export + Local Activity Log**
-   - Pre-export review checklist and final preview.
-   - Downloads strictly the sanitized document as `.txt` or `.csv` (`PapaParse` cell-level sanitization with structural re-verification).
-   - Never exports original text, pseudonym mappings, or internal logs.
-   - Includes a non-PII Activity Log drawer and confirmed **Clear All Document Data**.
+4. **Safe Export & Local Activity Log**
+   - Primary **Copy Safe Text** button, verified `.txt` / `.csv` downloads (`PapaParse` cell-level CSV sanitization with structural re-verification), and confirmed **Clear** workspace reset.
+   - Compact header **Activity** drawer records application actions only — never document text or PII.
 
 ---
 
@@ -59,8 +46,9 @@ clearshare/
 │   ├── app/AppContext.tsx
 │   ├── components/
 │   │   ├── analysis/HighlightedViewer.tsx
-│   │   ├── layout/{ActivityLogDrawer,ConfirmDialog,TopNav}.tsx
-│   │   └── simulator/{ExposureMeter,LinkabilityCard}.tsx
+│   │   ├── comparison/ExpandableComparison.tsx
+│   │   ├── layout/{ActivityLogDrawer,ConfirmDialog,InfoModal,TopNav}.tsx
+│   │   └── simulator/{LinkabilityCard,PrivacyRiskMeter}.tsx
 │   ├── data/syntheticSamples.ts
 │   ├── engines/
 │   │   ├── context/detectContextClues.ts
@@ -68,7 +56,7 @@ clearshare/
 │   │   ├── export/{csvProcessor,exportFile}.ts
 │   │   ├── redaction/sanitizeDocument.ts
 │   │   └── simulation/runExposureSimulation.ts
-│   ├── pages/{Workspace,AnalysisStudio,ExposureSimulator,ComparisonStudio,ReviewExport}.tsx
+│   ├── pages/Workspace.tsx
 │   ├── styles/tokens.css
 │   ├── types/clearshare.ts
 │   └── utils/categoryMeta.ts
@@ -125,8 +113,8 @@ gcloud run deploy clearshare \
 
 ## Hackathon Demo Flow
 
-1. Open **Main Workspace** and click **Load** on *Customer Support Ticket*.
-2. Click **Start Analysis** to inspect all detected emails, Indian phone numbers, PAN, Aadhaar-like IDs, IPv4s, and valid/invalid Luhn cards in **Document Analysis Studio**.
-3. Click **Simulate Privacy Exposure** — notice that even when direct identifiers are `[REDACTED]`, **Pune + 12 October 2026 + TKT-48291 + FinEdge Payments** create linkable exposure (`High` / `Moderate`).
-4. Check recommended contextual clues in the right panel and click **Apply Selected & Re-run Simulation** to watch the rule score drop transparently.
-5. Open **Comparison Studio** to verify side-by-side highlights, then export the clean `.txt` or `.csv` in **Review & Export**.
+1. Open the live workspace and click the **Customer Support Ticket** sample chip above the input editor.
+2. Notice the sanitized output and **Privacy Risk Meter** update automatically — direct PII is masked, yet **Pune + 12 October 2026 + TKT-48291** trigger linkability warnings.
+3. Click **Apply** on the recommended clue or toggle **Names** / **Locations** in Protection Categories to see exposure drop in real time.
+4. Click **Inspect Evidence** to examine rule-based point breakdowns and linkability cards, or click **Expand Comparison** for side-by-side diff highlights and entity validation notes.
+5. Click **Copy Safe Text** (or download `.txt`/`.csv`) to share the sanitized output safely.

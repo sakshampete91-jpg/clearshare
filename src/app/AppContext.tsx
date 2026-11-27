@@ -1,14 +1,15 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type {
   ActivityLogEntry,
   ContextClue,
+  ContextClueCategory,
   CsvGrid,
   DetectedEntity,
   DocumentSource,
+  EntityCategory,
   ExposureSimulationResult,
   RedactionResult,
   SanitizationMode,
-  ScreenId,
   SimulationSnapshot,
 } from '../types/clearshare';
 import { SYNTHETIC_SAMPLES } from '../data/syntheticSamples';
@@ -26,25 +27,39 @@ import {
   processCsvDocument,
 } from '../engines/export/csvProcessor';
 
+export const DEFAULT_ENABLED_DIRECT: EntityCategory[] = [
+  'EMAIL',
+  'PHONE',
+  'IPV4',
+  'PAN',
+  'AADHAAR',
+  'CARD',
+];
+
+export const DEFAULT_ENABLED_CONTEXT: ContextClueCategory[] = ['CUSTOM_PHRASE'];
+
 interface StatusBanner {
   kind: 'info' | 'success' | 'warning' | 'error';
   message: string;
 }
 
 interface AppContextValue {
-  activeScreen: ScreenId;
-  setActiveScreen: (screen: ScreenId) => void;
   rawText: string;
   setRawText: (text: string) => void;
   documentSource: DocumentSource;
   csvGrid: CsvGrid | null;
   sanitizationMode: SanitizationMode;
   setSanitizationMode: (mode: SanitizationMode) => void;
+  enabledDirectCategories: EntityCategory[];
+  toggleDirectCategory: (category: EntityCategory) => void;
+  enabledContextCategories: ContextClueCategory[];
+  toggleContextCategory: (category: ContextClueCategory) => void;
   customPhrases: string[];
   addCustomPhrase: (phrase: string) => void;
   removeCustomPhrase: (phrase: string) => void;
   additionalRedactions: string[];
   toggleAdditionalRedaction: (value: string) => void;
+  applySingleRecommendation: (value: string) => void;
   hasAnalyzed: boolean;
   isProcessing: boolean;
   isCsvMode: boolean;
@@ -60,8 +75,7 @@ interface AppContextValue {
   statusBanner: StatusBanner | null;
   clearStatusBanner: () => void;
   loadSample: (sampleId: string) => void;
-  startAnalysis: () => void;
-  rerunSimulation: (overrideMode?: SanitizationMode) => void;
+  loadUploadedFile: (file: File) => Promise<void>;
   clearAllData: () => void;
   logAction: (action: string, detail: string) => void;
   setBanner: (banner: StatusBanner | null) => void;
@@ -84,11 +98,16 @@ function makeId(prefix: string): string {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeScreen, setActiveScreen] = useState<ScreenId>('workspace');
   const [rawText, setRawTextState] = useState<string>('');
   const [documentSource, setDocumentSource] = useState<DocumentSource>({ kind: 'paste' });
   const [csvGrid, setCsvGrid] = useState<CsvGrid | null>(null);
   const [sanitizationMode, setSanitizationModeState] = useState<SanitizationMode>('full_mask');
+  const [enabledDirectCategories, setEnabledDirectCategories] = useState<EntityCategory[]>(
+    DEFAULT_ENABLED_DIRECT
+  );
+  const [enabledContextCategories, setEnabledContextCategories] = useState<ContextClueCategory[]>(
+    DEFAULT_ENABLED_CONTEXT
+  );
   const [customPhrases, setCustomPhrases] = useState<string[]>([]);
   const [additionalRedactions, setAdditionalRedactions] = useState<string[]>([]);
 
@@ -113,6 +132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
   ]);
   const [statusBanner, setStatusBanner] = useState<StatusBanner | null>(null);
+  const lastLoggedSignatureRef = useRef<string>('');
 
   const logAction = useCallback((action: string, detail: string) => {
     setActivityLog((prev) => [
@@ -128,12 +148,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setRawText = useCallback((text: string) => {
     setRawTextState(text);
-    setHasAnalyzed(false);
-    setSimulationResult(null);
-    setRedactionResult(null);
-    setAppliedSpans([]);
     setSimulationHistory([]);
-    setAdditionalRedactions([]);
   }, []);
 
   const setDocumentInputMeta = useCallback((source: DocumentSource, grid: CsvGrid | null) => {
@@ -144,7 +159,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setSanitizationMode = useCallback(
     (mode: SanitizationMode) => {
       setSanitizationModeState(mode);
-      logAction('Sanitization mode selected', SANITIZATION_MODE_META[mode].name);
+      logAction('Sanitization mode changed', SANITIZATION_MODE_META[mode].name);
+    },
+    [logAction]
+  );
+
+  const toggleDirectCategory = useCallback(
+    (category: EntityCategory) => {
+      setEnabledDirectCategories((prev) => {
+        const exists = prev.includes(category);
+        const next = exists ? prev.filter((c) => c !== category) : [...prev, category];
+        logAction(
+          'Protection category updated',
+          `${category} ${exists ? 'disabled' : 'enabled'} for sanitization`
+        );
+        return next;
+      });
+    },
+    [logAction]
+  );
+
+  const toggleContextCategory = useCallback(
+    (category: ContextClueCategory) => {
+      setEnabledContextCategories((prev) => {
+        const exists = prev.includes(category);
+        const next = exists ? prev.filter((c) => c !== category) : [...prev, category];
+        logAction(
+          'Contextual protection updated',
+          `${category} ${exists ? 'disabled' : 'enabled'} for sanitization`
+        );
+        return next;
+      });
     },
     [logAction]
   );
@@ -154,6 +199,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const trimmed = phrase.trim();
       if (!trimmed) return;
       setCustomPhrases((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+      setEnabledContextCategories((prev) =>
+        prev.includes('CUSTOM_PHRASE') ? prev : [...prev, 'CUSTOM_PHRASE']
+      );
       logAction('Custom sensitive phrase added', '1 custom phrase rule stored in memory');
     },
     [logAction]
@@ -169,15 +217,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, []);
 
-  const executePipeline = useCallback(
+  const applySingleRecommendation = useCallback(
+    (value: string) => {
+      setAdditionalRedactions((prev) => {
+        if (prev.some((v) => v.toLowerCase() === value.toLowerCase())) return prev;
+        return [...prev, value];
+      });
+      logAction('Recommendation applied', 'Additional contextual clue added to redaction list');
+    },
+    [logAction]
+  );
+
+  const runLivePipeline = useCallback(
     (
       textToProcess: string,
       modeToUse: SanitizationMode,
+      directCats: EntityCategory[],
+      contextCats: ContextClueCategory[],
       extraRedactions: string[],
       sourceMeta: DocumentSource,
-      phrases: string[],
-      isRerun: boolean
+      phrases: string[]
     ) => {
+      if (!textToProcess.trim()) {
+        setHasAnalyzed(false);
+        setIsCsvMode(false);
+        setCsvGrid(null);
+        setCsvStructureVerified(false);
+        setDetectedEntities([]);
+        setDetectionWarnings([]);
+        setContextClues([]);
+        setAppliedSpans([]);
+        setRedactionResult(null);
+        setSimulationResult(null);
+        setSimulationHistory([]);
+        return;
+      }
+
       const useCsv = isLikelyCsvInput(textToProcess, sourceMeta.kind, sourceMeta.fileName);
 
       if (useCsv) {
@@ -186,7 +261,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           modeToUse,
           phrases,
           extraRedactions,
-          sourceMeta.fileName ?? 'document.csv'
+          sourceMeta.fileName ?? 'document.csv',
+          directCats,
+          contextCats
         );
 
         const simOut = runExposureSimulation({
@@ -198,6 +275,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           appliedAdditionalRedactions: extraRedactions,
         });
 
+        setHasAnalyzed(true);
         setIsCsvMode(true);
         setCsvGrid(csvOut.originalGrid);
         setCsvStructureVerified(csvOut.structureVerified);
@@ -214,42 +292,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         setSimulationResult(simOut);
         setSimulationHistory((prev) => {
-          const snapshot: SimulationSnapshot = {
-            runNumber: isRerun ? prev.length + 1 : 1,
-            level: simOut.level,
-            scorePoints: simOut.scorePoints,
-            remainingDirectCount: simOut.remainingDirectEntities.length,
-            remainingClueCount: simOut.remainingContextClues.length,
-            linkabilityCount: simOut.linkabilityFindings.length,
-            mode: modeToUse,
-            additionalRedactionsCount: extraRedactions.length,
-          };
-          return isRerun ? [...prev, snapshot] : [snapshot];
+          const last = prev[prev.length - 1];
+          if (
+            last &&
+            last.scorePoints === simOut.scorePoints &&
+            last.mode === modeToUse &&
+            last.additionalRedactionsCount === extraRedactions.length
+          ) {
+            return prev;
+          }
+          return [
+            ...prev.slice(-9),
+            {
+              runNumber: prev.length + 1,
+              level: simOut.level,
+              scorePoints: simOut.scorePoints,
+              remainingDirectCount: simOut.remainingDirectEntities.length,
+              remainingClueCount: simOut.remainingContextClues.length,
+              linkabilityCount: simOut.linkabilityFindings.length,
+              mode: modeToUse,
+              additionalRedactionsCount: extraRedactions.length,
+            },
+          ];
         });
-
-        return {
-          directCount: csvOut.entities.length,
-          clueCount: csvOut.contextClues.length,
-          simLevel: simOut.level,
-          recCount: simOut.recommendations.length,
-        };
+        return;
       }
 
       // Plain text pipeline
       const detection = detectEntities(textToProcess);
       const clues = detectContextClues(textToProcess, phrases);
 
+      const directSet = new Set(directCats);
+      const contextSet = new Set(contextCats);
       const extraSet = new Set(
         extraRedactions.map((v) => v.trim().toLowerCase()).filter(Boolean)
       );
+
+      const entitiesToRedact = detection.entities.filter((e) => directSet.has(e.category));
       const cluesToRedact = clues.filter(
-        (c) => extraSet.has(c.normalizedValue) || extraSet.has(c.value.toLowerCase())
+        (c) =>
+          contextSet.has(c.category) ||
+          extraSet.has(c.normalizedValue) ||
+          extraSet.has(c.value.toLowerCase())
       );
 
       const registry = new InMemoryPseudonymRegistry();
       const redacted = sanitizeText(
         textToProcess,
-        detection.entities,
+        entitiesToRedact,
         modeToUse,
         cluesToRedact,
         registry
@@ -264,6 +354,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         appliedAdditionalRedactions: extraRedactions,
       });
 
+      setHasAnalyzed(true);
       setIsCsvMode(false);
       setCsvGrid(null);
       setCsvStructureVerified(false);
@@ -280,147 +371,161 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       setSimulationResult(simOut);
       setSimulationHistory((prev) => {
-        const snapshot: SimulationSnapshot = {
-          runNumber: isRerun ? prev.length + 1 : 1,
-          level: simOut.level,
-          scorePoints: simOut.scorePoints,
-          remainingDirectCount: simOut.remainingDirectEntities.length,
-          remainingClueCount: simOut.remainingContextClues.length,
-          linkabilityCount: simOut.linkabilityFindings.length,
-          mode: modeToUse,
-          additionalRedactionsCount: extraRedactions.length,
-        };
-        return isRerun ? [...prev, snapshot] : [snapshot];
+        const last = prev[prev.length - 1];
+        if (
+          last &&
+          last.scorePoints === simOut.scorePoints &&
+          last.mode === modeToUse &&
+          last.additionalRedactionsCount === extraRedactions.length
+        ) {
+          return prev;
+        }
+        return [
+          ...prev.slice(-9),
+          {
+            runNumber: prev.length + 1,
+            level: simOut.level,
+            scorePoints: simOut.scorePoints,
+            remainingDirectCount: simOut.remainingDirectEntities.length,
+            remainingClueCount: simOut.remainingContextClues.length,
+            linkabilityCount: simOut.linkabilityFindings.length,
+            mode: modeToUse,
+            additionalRedactionsCount: extraRedactions.length,
+          },
+        ];
       });
 
-      return {
-        directCount: detection.entities.length,
-        clueCount: clues.length,
-        simLevel: simOut.level,
-        recCount: simOut.recommendations.length,
-      };
+      const sig = `${textToProcess.length}|${detection.entities.length}|${simOut.level}|${modeToUse}`;
+      if (lastLoggedSignatureRef.current !== sig) {
+        lastLoggedSignatureRef.current = sig;
+        logAction(
+          'Live analysis & simulation updated',
+          `${detection.entities.length} direct entities, ${clues.length} contextual clues · ${simOut.level} Exposure`
+        );
+      }
     },
-    []
+    [logAction]
   );
+
+  // Instant debounced live analysis whenever input or settings change
+  useEffect(() => {
+    if (!rawText.trim()) {
+      runLivePipeline(
+        rawText,
+        sanitizationMode,
+        enabledDirectCategories,
+        enabledContextCategories,
+        additionalRedactions,
+        documentSource,
+        customPhrases
+      );
+      setIsProcessing(false);
+      return;
+    }
+
+    setIsProcessing(true);
+    const timer = window.setTimeout(() => {
+      try {
+        runLivePipeline(
+          rawText,
+          sanitizationMode,
+          enabledDirectCategories,
+          enabledContextCategories,
+          additionalRedactions,
+          documentSource,
+          customPhrases
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to process document locally.';
+        setStatusBanner({ kind: 'error', message: msg });
+        logAction('Processing error', 'Local parser encountered invalid structure');
+      } finally {
+        setIsProcessing(false);
+      }
+    }, 90);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    rawText,
+    sanitizationMode,
+    enabledDirectCategories,
+    enabledContextCategories,
+    additionalRedactions,
+    documentSource,
+    customPhrases,
+    runLivePipeline,
+    logAction,
+  ]);
 
   const loadSample = useCallback(
     (sampleId: string) => {
       const sample = SYNTHETIC_SAMPLES.find((s) => s.id === sampleId);
       if (!sample) return;
-      setRawTextState(sample.content);
+      setAdditionalRedactions([]);
+      setSimulationHistory([]);
+      setEnabledDirectCategories(DEFAULT_ENABLED_DIRECT);
+      setEnabledContextCategories(DEFAULT_ENABLED_CONTEXT);
       setDocumentSource({
         kind: sample.format === 'csv' ? 'csv' : 'sample',
         fileName: `${sample.id}.${sample.format}`,
         sampleId: sample.id,
       });
-      setCsvGrid(null);
-      setHasAnalyzed(false);
-      setDetectedEntities([]);
-      setDetectionWarnings([]);
-      setContextClues([]);
-      setAppliedSpans([]);
-      setRedactionResult(null);
-      setSimulationResult(null);
-      setSimulationHistory([]);
-      setAdditionalRedactions([]);
-      setStatusBanner({
-        kind: 'success',
-        message: `Loaded synthetic sample: ${sample.title}. Click "Start Analysis" to run detection and simulation.`,
-      });
+      setRawTextState(sample.content);
+      setStatusBanner(null);
       logAction('Synthetic sample loaded', `${sample.title} (${sample.format.toUpperCase()})`);
     },
     [logAction]
   );
 
-  const startAnalysis = useCallback(() => {
-    if (!rawText.trim()) {
-      setStatusBanner({
-        kind: 'warning',
-        message: 'Paste text, upload a TXT/CSV file, or load a synthetic sample before starting analysis.',
-      });
-      return;
-    }
+  const loadUploadedFile = useCallback(
+    async (file: File) => {
+      const lower = file.name.toLowerCase();
+      const isTxt = lower.endsWith('.txt') || file.type === 'text/plain';
+      const isCsv = lower.endsWith('.csv') || file.type === 'text/csv';
 
-    setIsProcessing(true);
-    try {
-      logAction('Analysis started', `Processing ${rawText.length} characters locally`);
-      const summary = executePipeline(
-        rawText,
-        sanitizationMode,
-        additionalRedactions,
-        documentSource,
-        customPhrases,
-        false
-      );
-      setHasAnalyzed(true);
-      logAction(
-        'Entities detected & redacted',
-        `${summary.directCount} direct entities, ${summary.clueCount} contextual clues processed (${SANITIZATION_MODE_META[sanitizationMode].shortName})`
-      );
-      logAction(
-        'Exposure simulation completed',
-        `Assessed ${summary.simLevel} Exposure; ${summary.recCount} recommendation(s) generated`
-      );
-      setStatusBanner({
-        kind: 'success',
-        message: `Analysis complete: ${summary.directCount} direct identifier(s) and ${summary.clueCount} contextual clue(s) evaluated.`,
-      });
-      setActiveScreen('analysis');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unable to process document locally.';
-      setStatusBanner({ kind: 'error', message: msg });
-      logAction('Processing error', 'Local parser encountered invalid structure');
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [
-    rawText,
-    sanitizationMode,
-    additionalRedactions,
-    documentSource,
-    customPhrases,
-    executePipeline,
-    logAction,
-  ]);
-
-  const rerunSimulation = useCallback(
-    (overrideMode?: SanitizationMode) => {
-      if (!rawText.trim()) return;
-      const modeToUse = overrideMode ?? sanitizationMode;
-      if (overrideMode && overrideMode !== sanitizationMode) {
-        setSanitizationModeState(overrideMode);
-        logAction('Sanitization mode changed', SANITIZATION_MODE_META[overrideMode].name);
+      if (!isTxt && !isCsv) {
+        setStatusBanner({
+          kind: 'error',
+          message: 'Unsupported file format. Upload a .txt or .csv document.',
+        });
+        return;
       }
-      setIsProcessing(true);
+
+      const maxBytes = 2 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        setStatusBanner({
+          kind: 'error',
+          message: 'File exceeds the 2 MB browser safety limit. Please split smaller batches.',
+        });
+        return;
+      }
+
       try {
-        const summary = executePipeline(
-          rawText,
-          modeToUse,
-          additionalRedactions,
-          documentSource,
-          customPhrases,
-          true
-        );
-        logAction(
-          'Exposure re-simulation completed',
-          `Result: ${summary.simLevel} Exposure (${additionalRedactions.length} extra clue redaction rule(s) active)`
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Re-simulation failed.';
-        setStatusBanner({ kind: 'error', message: msg });
-      } finally {
-        setIsProcessing(false);
+        const content = await file.text();
+        if (!content.trim()) {
+          setStatusBanner({
+            kind: 'warning',
+            message: 'The selected file is empty. Choose a file with text content.',
+          });
+          return;
+        }
+        setAdditionalRedactions([]);
+        setSimulationHistory([]);
+        setDocumentSource({ kind: isCsv ? 'csv' : 'txt', fileName: file.name });
+        setRawTextState(content);
+        setStatusBanner({
+          kind: 'success',
+          message: `Loaded ${file.name} locally in browser memory.`,
+        });
+        logAction(`${isCsv ? 'CSV' : 'TXT'} document loaded`, `Size: ${file.size} bytes`);
+      } catch {
+        setStatusBanner({
+          kind: 'error',
+          message: 'Could not read the selected file locally in the browser.',
+        });
       }
     },
-    [
-      rawText,
-      sanitizationMode,
-      additionalRedactions,
-      documentSource,
-      customPhrases,
-      executePipeline,
-      logAction,
-    ]
+    [logAction]
   );
 
   const clearAllData = useCallback(() => {
@@ -431,6 +536,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCsvStructureVerified(false);
     setCustomPhrases([]);
     setAdditionalRedactions([]);
+    setEnabledDirectCategories(DEFAULT_ENABLED_DIRECT);
+    setEnabledContextCategories(DEFAULT_ENABLED_CONTEXT);
     setHasAnalyzed(false);
     setDetectedEntities([]);
     setDetectionWarnings([]);
@@ -439,9 +546,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRedactionResult(null);
     setSimulationResult(null);
     setSimulationHistory([]);
+    lastLoggedSignatureRef.current = '';
     setStatusBanner({
       kind: 'success',
-      message: 'All document data, findings, and in-memory mappings have been cleared.',
+      message: 'Workspace cleared. All document content and in-memory mappings discarded.',
     });
     setActivityLog([
       {
@@ -451,25 +559,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         detail: 'All in-memory document content and pseudonym maps discarded.',
       },
     ]);
-    setActiveScreen('workspace');
   }, []);
 
   return (
     <AppContext.Provider
       value={{
-        activeScreen,
-        setActiveScreen,
         rawText,
         setRawText,
         documentSource,
         csvGrid,
         sanitizationMode,
         setSanitizationMode,
+        enabledDirectCategories,
+        toggleDirectCategory,
+        enabledContextCategories,
+        toggleContextCategory,
         customPhrases,
         addCustomPhrase,
         removeCustomPhrase,
         additionalRedactions,
         toggleAdditionalRedaction,
+        applySingleRecommendation,
         hasAnalyzed,
         isProcessing,
         isCsvMode,
@@ -485,8 +595,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         statusBanner,
         clearStatusBanner: () => setStatusBanner(null),
         loadSample,
-        startAnalysis,
-        rerunSimulation,
+        loadUploadedFile,
         clearAllData,
         logAction,
         setBanner: setStatusBanner,
