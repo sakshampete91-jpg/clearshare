@@ -26,4 +26,20 @@ describe('CSV Processor', () => {
     expect(reparsed.data[1][3]).toContain('Reported "urgent" issue');
     expect(reparsed.data[1][3]).toContain('\n');
   });
+
+  it('neutralizes spreadsheet formula injection triggers (=, +, -, @) and reports the count', () => {
+    const dangerousCsv = [
+      'Name,Formula,Phone',
+      '"Alice","=CMD|\' /C calc\'!A0","+91 9876543210"',
+      '"Bob","@SUM(1+1)","-2+3"',
+    ].join('\n');
+
+    const result = processCsvDocument(dangerousCsv, 'full_mask');
+
+    expect(result.structureVerified).toBe(true);
+    expect(result.formulaNeutralizedCount).toBe(3);
+    expect(result.sanitizedGrid.rows[0][1]).toBe("'=CMD|' /C calc'!A0");
+    expect(result.sanitizedGrid.rows[1][1]).toBe("'@SUM(1+1)");
+    expect(result.sanitizedGrid.rows[1][2]).toBe("'-2+3");
+  });
 });

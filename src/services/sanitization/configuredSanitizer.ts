@@ -4,7 +4,6 @@ import type {
   CustomPatternRule,
   DetectedEntity,
   EntityCategory,
-  MaskingChar,
   SanitizationOptions,
 } from '../../types/clearshare';
 import {
@@ -16,7 +15,7 @@ import { validateCustomRegexPattern } from '../../security/inputGuards';
 
 export const DEFAULT_SANITIZATION_OPTIONS: SanitizationOptions = {
   mode: 'full_mask',
-  maskChar: '*',
+  maskChar: 'auto',
   fullMaskStyle: 'token',
   partialTrailingDigits: 4,
   partialKeepEmailDomain: true,
@@ -46,7 +45,7 @@ const CLUE_PSEUDONYM_PREFIX: Record<ContextClueCategory, string> = {
   UNCERTAIN: 'CLUE',
 };
 
-function repeatMask(char: MaskingChar, count: number): string {
+function repeatMask(char: string, count: number): string {
   return char.repeat(Math.max(1, count));
 }
 
@@ -55,11 +54,13 @@ export function formatConfiguredPartialMask(
   rawValue: string,
   options: SanitizationOptions
 ): string {
-  const m = options.maskChar;
+  const isAuto = options.maskChar === 'auto';
   const keepDigits = options.partialTrailingDigits;
 
   switch (category) {
     case 'EMAIL': {
+      // Avoid using alphanumeric 'X' in email local-part so masked output cannot mimic a valid email address
+      const m = isAuto || options.maskChar === 'X' ? '*' : options.maskChar;
       const atIdx = rawValue.indexOf('@');
       if (atIdx <= 0) return '[REDACTED]';
       const local = rawValue.slice(0, atIdx);
@@ -75,16 +76,19 @@ export function formatConfiguredPartialMask(
       return `${maskedLocal}@${domHead}${repeatMask(m, 4)}${tld}`;
     }
     case 'PHONE': {
+      const m = isAuto ? '*' : options.maskChar;
       const digits = rawValue.replace(/\D/g, '');
       const tail = digits.slice(-keepDigits);
       return `${repeatMask(m, Math.max(4, 10 - keepDigits))}${tail}`;
     }
     case 'PAN': {
+      const m = isAuto ? '*' : options.maskChar;
       const clean = rawValue.trim().toUpperCase();
       if (clean.length !== 10) return '[REDACTED]';
       return `${clean.slice(0, 5)}${repeatMask(m, 4)}${clean.slice(9)}`;
     }
     case 'CARD': {
+      const m = isAuto ? 'X' : options.maskChar;
       const digits = rawValue.replace(/\D/g, '');
       const tail = digits.slice(-keepDigits);
       const block = repeatMask(m, 4);
@@ -93,6 +97,7 @@ export function formatConfiguredPartialMask(
         : `${block} ${block} ${tail}`;
     }
     case 'AADHAAR': {
+      const m = isAuto ? 'X' : options.maskChar;
       const digits = rawValue.replace(/\D/g, '');
       const tail = digits.slice(-keepDigits);
       const block = repeatMask(m, 4);
@@ -101,12 +106,14 @@ export function formatConfiguredPartialMask(
         : `${block} ${block} ${tail}`;
     }
     case 'IPV4': {
+      const m = isAuto ? 'x' : options.maskChar;
       const parts = rawValue.split('.');
       if (parts.length !== 4) return '[REDACTED]';
       const maskedOctet = repeatMask(m, 3);
       return `${maskedOctet}.${maskedOctet}.${maskedOctet}.${parts[3]}`;
     }
     case 'API_KEY': {
+      const m = isAuto ? '*' : options.maskChar;
       const tail = rawValue.slice(-keepDigits);
       return `${repeatMask(m, 4)}${tail}`;
     }
@@ -174,7 +181,8 @@ export function sanitizeWithOptions(
 
   const fullMaskText = (rawLen: number): string => {
     if (options.fullMaskStyle === 'char_block') {
-      return repeatMask(options.maskChar, Math.min(Math.max(rawLen, 4), 16));
+      const blockChar = options.maskChar === 'auto' ? '*' : options.maskChar;
+      return repeatMask(blockChar, Math.min(Math.max(rawLen, 4), 16));
     }
     return '[REDACTED]';
   };

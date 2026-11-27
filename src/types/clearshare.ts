@@ -3,6 +3,7 @@ export type ScreenId =
   | 'analysis'
   | 'simulator'
   | 'comparison'
+  | 'verification'
   | 'export';
 
 export type EntityCategory =
@@ -19,7 +20,7 @@ export type SanitizationMode =
   | 'partial_mask'
   | 'pseudonymize';
 
-export type MaskingChar = '*' | 'X' | '#' | '•';
+export type MaskingChar = 'auto' | '*' | 'X' | '#' | '•';
 
 export interface SanitizationOptions {
   mode: SanitizationMode;
@@ -172,6 +173,7 @@ export interface RedactionResult {
   redactedDirectCount: number;
   redactedContextCount: number;
   pseudonymCount: number;
+  formulaNeutralizedCount?: number;
 }
 
 export interface ActivityLogEntry {

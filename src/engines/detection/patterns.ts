@@ -21,6 +21,8 @@ export const CARD_CANDIDATE_REGEX =
 
 // Conservative API Key & Secret patterns (strict prefixes & minimum lengths)
 export const OPENAI_KEY_REGEX = /\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}\b/g;
+export const STRIPE_KEY_REGEX = /\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}\b/g;
+export const SLACK_TOKEN_REGEX = /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/g;
 export const AWS_ACCESS_KEY_REGEX = /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g;
 export const GITHUB_TOKEN_REGEX =
   /\b(?:(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})\b/g;

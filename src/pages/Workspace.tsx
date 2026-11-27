@@ -1,19 +1,11 @@
 import React, { useMemo, useRef, useState } from 'react';
-import Papa from 'papaparse';
 import {
-  Check,
-  Columns2,
-  Copy,
-  Download,
-  FileSpreadsheet,
   FileText,
   History,
-  Loader2,
   Plus,
   Stethoscope,
   Ticket,
   Trash2,
-  Upload,
   UserCheck,
   X,
 } from 'lucide-react';
@@ -25,13 +17,10 @@ import type {
   EntityCategory,
   SanitizationMode,
 } from '../types/clearshare';
-import {
-  buildSafeExportFileName,
-  copyTextToClipboard,
-  downloadSanitizedFile,
-} from '../engines/export/exportFile';
-import { PrivacyRiskMeter } from '../components/simulator/PrivacyRiskMeter';
+import { UploadDropZone } from '../features/workspace/UploadDropZone';
+import { OutputPanel } from '../features/workspace/OutputPanel';
 import { ExpandableComparison } from '../components/comparison/ExpandableComparison';
+import { ConfirmDialog } from '../components/layout/ConfirmDialog';
 
 const DIRECT_CATEGORY_ITEMS: { key: EntityCategory; label: string }[] = [
   { key: 'EMAIL', label: 'Emails' },
@@ -55,6 +44,13 @@ const SAMPLE_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   'support-ticket': Ticket,
 };
 
+const WORKFLOW_STEPS = [
+  { num: '01', title: 'Upload', desc: 'Paste or load TXT, CSV, PDF, DOCX, JSON locally' },
+  { num: '02', title: 'Analyse', desc: 'Detect PII, credentials, and contextual clues' },
+  { num: '03', title: 'Protect', desc: 'Mask, partially mask, or pseudonymize values' },
+  { num: '04', title: 'Verify', desc: 'Re-scan output for residual exposure before sharing' },
+];
+
 export const Workspace: React.FC = () => {
   const {
     rawText,
@@ -69,32 +65,22 @@ export const Workspace: React.FC = () => {
     customRules,
     addCustomRule,
     removeCustomRule,
-    additionalRedactions,
     hasAnalyzed,
-    isProcessing,
-    isCsvMode,
-    csvStructureVerified,
     detectedEntities,
     contextClues,
     redactionResult,
     verificationStatus,
-    verificationReport,
     localSessions,
     loadSample,
-    loadUploadedFile,
     clearAllData,
-    logAction,
-    setBanner,
     setDocumentInputMeta,
   } = useApp();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const [phraseInput, setPhraseInput] = useState('');
   const [ruleError, setRuleError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
-  const [csvPreviewTable, setCsvPreviewTable] = useState(false);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   const detectedCounts = useMemo(() => {
     const direct: Record<EntityCategory, number> = {
@@ -123,89 +109,6 @@ export const Workspace: React.FC = () => {
     return { direct, context };
   }, [detectedEntities, contextClues]);
 
-  const redactionSummary = useMemo(() => {
-    const directEnabledSet = new Set(enabledDirectCategories);
-    const contextEnabledSet = new Set(enabledContextCategories);
-    const extraSet = new Set(additionalRedactions.map((v) => v.toLowerCase()));
-
-    const counts: Record<string, number> = {
-      EMAIL: 0,
-      PHONE: 0,
-      IPV4: 0,
-      PAN: 0,
-      AADHAAR: 0,
-      CARD: 0,
-      API_KEY: 0,
-      PERSON_NAME: 0,
-      LOCATION: 0,
-      OTHER_CLUE: 0,
-    };
-
-    for (const ent of detectedEntities) {
-      if (directEnabledSet.has(ent.category)) {
-        counts[ent.category] += 1;
-      }
-    }
-
-    for (const clue of contextClues) {
-      const overlapsDirect = detectedEntities.some(
-        (e) =>
-          directEnabledSet.has(e.category) &&
-          clue.start < e.end &&
-          e.start < clue.end &&
-          (clue.rowIndex === undefined || clue.rowIndex === e.rowIndex)
-      );
-      if (overlapsDirect) continue;
-
-      const isRedacted =
-        contextEnabledSet.has(clue.category) ||
-        extraSet.has(clue.normalizedValue) ||
-        extraSet.has(clue.value.toLowerCase());
-
-      if (!isRedacted) continue;
-
-      if (clue.category === 'PERSON_NAME') counts.PERSON_NAME += 1;
-      else if (clue.category === 'LOCATION') counts.LOCATION += 1;
-      else counts.OTHER_CLUE += 1;
-    }
-
-    return [
-      { key: 'EMAIL', label: 'Emails', count: counts.EMAIL, tone: 'bg-sage text-forest-hover' },
-      { key: 'PHONE', label: 'Phones', count: counts.PHONE, tone: 'bg-[#E5EEF4] text-[#1F4966]' },
-      { key: 'IPV4', label: 'IPv4', count: counts.IPV4, tone: 'bg-lavender text-royal-hover' },
-      { key: 'PAN', label: 'PAN', count: counts.PAN, tone: 'bg-status-warning text-[#664212]' },
-      { key: 'AADHAAR', label: 'Aadhaar-like', count: counts.AADHAAR, tone: 'bg-status-error text-[#732820]' },
-      { key: 'CARD', label: 'Cards', count: counts.CARD, tone: 'bg-[#F1E4EA] text-[#682948]' },
-      { key: 'API_KEY', label: 'API Keys', count: counts.API_KEY, tone: 'bg-lavender text-royal-hover' },
-      { key: 'PERSON_NAME', label: 'Names', count: counts.PERSON_NAME, tone: 'bg-sage text-forest-hover' },
-      { key: 'LOCATION', label: 'Locations', count: counts.LOCATION, tone: 'bg-[#E5EEF4] text-[#1F4966]' },
-      ...(counts.OTHER_CLUE > 0
-        ? [{ key: 'OTHER_CLUE', label: 'Extra Clues', count: counts.OTHER_CLUE, tone: 'bg-lavender text-royal-hover' }]
-        : []),
-    ];
-  }, [
-    detectedEntities,
-    contextClues,
-    enabledDirectCategories,
-    enabledContextCategories,
-    additionalRedactions,
-  ]);
-
-  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    await loadUploadedFile(file);
-  };
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    await loadUploadedFile(file);
-  };
-
   const handleAddPhrase = (e: React.FormEvent) => {
     e.preventDefault();
     const res = addCustomRule(phraseInput, 'literal');
@@ -217,87 +120,72 @@ export const Workspace: React.FC = () => {
     setPhraseInput('');
   };
 
-  const handleClearWorkspace = () => {
+  const executeClear = () => {
     setComparisonOpen(false);
-    setCsvPreviewTable(false);
     setPhraseInput('');
     setRuleError(null);
     clearAllData();
   };
 
-  const verificationBlocked =
-    verificationStatus === 'Verification failed' ||
-    (verificationReport !== null && !verificationReport.passed);
-
-  const hasOutput = Boolean(
-    hasAnalyzed && redactionResult?.sanitizedText && !verificationBlocked
-  );
-
-  const handleCopySafeText = async () => {
-    if (!hasOutput || !redactionResult?.sanitizedText) return;
-    try {
-      const ok = await copyTextToClipboard(redactionResult.sanitizedText);
-      if (ok) {
-        setCopied(true);
-        logAction('Sanitized text copied', 'Copied sanitized output to clipboard');
-        window.setTimeout(() => setCopied(false), 2000);
-      } else {
-        setBanner({
-          kind: 'warning',
-          message: 'Clipboard API unavailable in this browser context. Use Download instead.',
-        });
-      }
-    } catch {
-      setBanner({
-        kind: 'error',
-        message: 'Clipboard copy was blocked by browser permissions.',
-      });
+  const handleStartNewAnalysis = () => {
+    if (rawText.trim()) {
+      setConfirmResetOpen(true);
+    } else {
+      editorRef.current?.focus();
     }
-  };
-
-  const handleDownload = (ext: 'txt' | 'csv') => {
-    if (!hasOutput || !redactionResult?.sanitizedText) return;
-    const fileName = buildSafeExportFileName(documentSource.fileName, ext);
-
-    if (ext === 'txt') {
-      downloadSanitizedFile(
-        redactionResult.sanitizedText,
-        fileName,
-        'text/plain;charset=utf-8'
-      );
-      logAction('Sanitized TXT exported', `Downloaded ${fileName}`);
-      return;
-    }
-
-    let csvPayload = redactionResult.sanitizedText;
-    if (!isCsvMode) {
-      const lines = redactionResult.sanitizedText.split(/\r?\n/);
-      csvPayload = Papa.unparse(
-        [['Line', 'Sanitized Content'], ...lines.map((line, i) => [String(i + 1), line])],
-        { newline: '\n' }
-      );
-    }
-    downloadSanitizedFile(csvPayload, fileName, 'text/csv;charset=utf-8');
-    logAction('Sanitized CSV exported', `Downloaded ${fileName}`);
   };
 
   const charCount = rawText.length;
   const lineCount = rawText ? rawText.split(/\r?\n/).length : 0;
-  const removedTotal = redactionResult
-    ? redactionResult.redactedDirectCount + redactionResult.redactedContextCount
-    : 0;
   const canClear = Boolean(rawText.trim() || customRules.length > 0);
+  const hasOutput = Boolean(
+    hasAnalyzed && redactionResult?.sanitizedText && verificationStatus !== 'Verification failed'
+  );
 
   return (
     <div className="space-y-4">
+      {/* Editorial Welcome & Workflow Strip */}
+      <section className="cs-card px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="font-heading text-xl font-bold tracking-tight text-ink">
+              Your documents. Your privacy. Your control.
+            </h1>
+            <p className="mt-0.5 text-xs text-muted">
+              Discover sensitive information, understand potential exposure and prepare documents
+              for safer sharing.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleStartNewAnalysis}
+            className="cs-focus-ring inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-forest px-4 py-2 text-xs font-semibold text-surface hover:bg-forest-hover"
+          >
+            <span>Start new analysis</span>
+          </button>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-warm-border pt-3 sm:grid-cols-4">
+          {WORKFLOW_STEPS.map((step) => (
+            <div key={step.num} className="text-[11px]">
+              <span className="font-mono font-bold text-royal">{step.num}</span>
+              <span className="mx-1 text-subtle">—</span>
+              <span className="font-semibold text-ink">{step.title}.</span>{' '}
+              <span className="text-muted">{step.desc}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Main 2-Column Live Privacy Workbench */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* LEFT COLUMN: INPUT DOCUMENT & CONTROLS */}
         <section className="cs-card flex flex-col p-4 lg:col-span-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-bold uppercase tracking-wide text-ink">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-ink">
                 Input Document
-              </h1>
+              </h2>
               {documentSource.fileName && (
                 <span className="rounded-md bg-cream px-2 py-0.5 text-[11px] font-medium text-muted">
                   {documentSource.fileName}
@@ -311,7 +199,7 @@ export const Workspace: React.FC = () => {
               </span>
               <button
                 type="button"
-                onClick={handleClearWorkspace}
+                onClick={executeClear}
                 disabled={!canClear}
                 aria-label="Clear workspace"
                 className="cs-focus-ring inline-flex min-h-[30px] items-center gap-1 rounded-lg border border-warm-border bg-surface px-2.5 py-1 text-xs font-medium text-[#732820] transition-colors hover:border-[#DFB3AC] hover:bg-status-error/45 disabled:cursor-not-allowed disabled:opacity-40"
@@ -354,6 +242,7 @@ export const Workspace: React.FC = () => {
             Paste sensitive text or upload a document
           </label>
           <textarea
+            ref={editorRef}
             id="document-editor"
             value={rawText}
             onChange={(e) => {
@@ -361,47 +250,11 @@ export const Workspace: React.FC = () => {
               setDocumentInputMeta({ kind: 'paste' }, null);
             }}
             placeholder="Paste sensitive text here or upload a document to detect and sanitize personal information."
-            className="cs-focus-ring mt-2.5 h-44 w-full resize-y rounded-xl border border-warm-border bg-cream/35 p-3 font-mono text-xs leading-relaxed text-ink placeholder:text-subtle lg:h-[192px]"
+            className="cs-focus-ring mt-2.5 h-44 w-full resize-y rounded-xl border border-warm-border bg-cream/35 p-3 font-mono text-xs leading-relaxed text-ink placeholder:text-subtle lg:h-[188px]"
           />
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,.csv,.pdf,.docx,.json,text/plain,text/csv,application/pdf,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            className="hidden"
-            onChange={handleFileInput}
-          />
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => fileInputRef.current?.click()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                fileInputRef.current?.click();
-              }
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            className={`cs-focus-ring mt-2 flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-dashed px-3 py-2 text-xs transition-colors ${
-              isDragging
-                ? 'border-forest bg-sage/60 text-forest-hover'
-                : 'border-[#D8D1C4] bg-cream/45 text-muted hover:border-forest/70 hover:bg-sage/30'
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <Upload className="h-3.5 w-3.5 shrink-0 text-forest" aria-hidden="true" />
-              <span>
-                Drop a document here or browse — <strong>TXT, CSV, PDF, DOCX, JSON</strong>
-              </span>
-            </span>
-            <span className="shrink-0 rounded-md border border-warm-border bg-surface px-2 py-0.5 text-[11px] font-semibold text-forest">
-              Browse
-            </span>
+          <div className="mt-2">
+            <UploadDropZone />
           </div>
 
           {/* Compact Sanitization Modes */}
@@ -580,192 +433,32 @@ export const Workspace: React.FC = () => {
           </div>
         </section>
 
-        {/* RIGHT COLUMN: HERO PRIVACY RISK METER, SANITIZED OUTPUT & SUMMARY */}
-        <section className="cs-card flex flex-col p-4 lg:col-span-6">
-          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-ink">
-                Sanitized Output
-              </h2>
-              {isProcessing && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-lavender px-2 py-0.5 text-[11px] font-medium text-royal">
-                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                  <span>Updating</span>
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {hasOutput && (
-                <span className="rounded-md bg-sage px-2 py-0.5 text-[11px] font-semibold text-forest-hover">
-                  {removedTotal} redacted
-                </span>
-              )}
-              {isCsvMode && csvStructureVerified && (
-                <button
-                  type="button"
-                  onClick={() => setCsvPreviewTable((v) => !v)}
-                  className="cs-focus-ring rounded-md border border-warm-border bg-cream px-2 py-0.5 text-[11px] font-medium text-ink hover:bg-sage/60"
-                >
-                  {csvPreviewTable ? 'Raw CSV' : 'CSV Table'}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <PrivacyRiskMeter />
-
-          <div className="mt-3 flex min-h-[220px] flex-1 flex-col">
-            {!hasOutput ? (
-              <div className="flex flex-1 items-center justify-center rounded-xl border border-warm-border bg-cream/35 p-6 text-center text-xs text-muted">
-                <p className="max-w-xs leading-relaxed">
-                  {verificationBlocked
-                    ? 'Output blocked because independent verification failed. Review the error notice above.'
-                    : 'Sanitized output appears here automatically as you paste text, upload a document (TXT, CSV, PDF, DOCX, JSON), or select a sample.'}
-                </p>
-              </div>
-            ) : isCsvMode && csvPreviewTable && redactionResult?.sanitizedCsv ? (
-              <div className="max-h-[320px] flex-1 overflow-auto rounded-xl border border-[#B6D4BA] bg-surface">
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead>
-                    <tr className="bg-cream">
-                      {redactionResult.sanitizedCsv.headers.map((h, i) => (
-                        <th
-                          key={i}
-                          className="border-b border-warm-border px-2.5 py-1.5 font-semibold text-ink"
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {redactionResult.sanitizedCsv.rows.map((row, rIdx) => (
-                      <tr key={rIdx} className="border-b border-warm-border last:border-0">
-                        {row.map((cell, cIdx) => (
-                          <td
-                            key={cIdx}
-                            className="max-w-[180px] whitespace-pre-wrap px-2.5 py-1.5 font-mono text-[11px] text-ink"
-                          >
-                            {cell}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <pre
-                aria-label="Sanitized output text"
-                className="max-h-[320px] flex-1 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-[#B6D4BA] bg-surface p-3.5 font-mono text-xs leading-relaxed text-ink select-text"
-              >
-                {redactionResult?.sanitizedText}
-              </pre>
-            )}
-          </div>
-
-          {/* Compact REDACTION SUMMARY Strip */}
-          <div
-            aria-label="Redaction Summary"
-            className="mt-2.5 rounded-xl border border-warm-border bg-cream/55 px-3 py-2"
-          >
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 text-[10px] font-bold uppercase tracking-wider text-muted">
-                Redaction Summary
-              </span>
-              {!hasOutput ? (
-                <span className="text-[11px] text-muted">0 items redacted</span>
-              ) : (
-                redactionSummary.map((item) => (
-                  <span
-                    key={item.key}
-                    className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
-                      item.count > 0 ? item.tone : 'bg-surface/70 text-subtle'
-                    }`}
-                  >
-                    <span className="font-bold">{item.count}</span>
-                    <span>{item.label}</span>
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Output Toolbar */}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-warm-border pt-3">
-            <button
-              type="button"
-              onClick={handleCopySafeText}
-              disabled={!hasOutput}
-              className="cs-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-forest px-4 py-2 text-xs font-semibold text-surface transition-colors hover:bg-forest-hover disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {copied ? (
-                <Check className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <Copy className="h-4 w-4" aria-hidden="true" />
-              )}
-              <span>{copied ? 'Copied Safe Text!' : 'Copy Safe Text'}</span>
-            </button>
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleDownload('txt')}
-                disabled={!hasOutput}
-                title="Download sanitized TXT"
-                className="cs-focus-ring inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-warm-border bg-surface px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-cream disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <Download className="h-3.5 w-3.5 text-forest" aria-hidden="true" />
-                <FileText className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
-                <span>TXT</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDownload('csv')}
-                disabled={!hasOutput}
-                title="Download sanitized CSV"
-                className="cs-focus-ring inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-warm-border bg-surface px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-cream disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <Download className="h-3.5 w-3.5 text-forest" aria-hidden="true" />
-                <FileSpreadsheet className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
-                <span>CSV</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setComparisonOpen((v) => !v)}
-                disabled={!hasOutput}
-                aria-expanded={comparisonOpen}
-                className={`cs-focus-ring inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
-                  comparisonOpen
-                    ? 'border-forest bg-sage/60 text-forest-hover'
-                    : 'border-warm-border bg-surface text-ink hover:bg-cream'
-                }`}
-              >
-                <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{comparisonOpen ? 'Hide Comparison' : 'Expand Comparison'}</span>
-              </button>
-            </div>
-          </div>
-        </section>
+        {/* RIGHT COLUMN: SANITIZED OUTPUT & HERO RISK METER */}
+        <OutputPanel
+          comparisonOpen={comparisonOpen}
+          onToggleComparison={() => setComparisonOpen((v) => !v)}
+        />
       </div>
 
-      {/* Expandable Comparison & Entity Details */}
+      {/* Expandable Comparison */}
       <ExpandableComparison
         open={comparisonOpen && hasOutput}
         onClose={() => setComparisonOpen(false)}
       />
 
-      {/* Compact Recent Local Sessions (In-Memory Only, Zero PII) */}
-      {localSessions.length > 0 && (
-        <section className="cs-card px-4 py-3" aria-label="Recent local sessions">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-ink">
-              <History className="h-3.5 w-3.5 text-royal" aria-hidden="true" />
-              <span>Recent Local Sessions (Memory Only):</span>
+      {/* Local Session Overview (Genuine In-Memory Metadata or Helpful Onboarding Empty State) */}
+      <section className="cs-card px-4 py-3" aria-label="Recent local sessions">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 font-semibold text-ink">
+            <History className="h-3.5 w-3.5 text-royal" aria-hidden="true" />
+            <span>Recent Local Sessions (Memory Only):</span>
+          </span>
+          {localSessions.length === 0 ? (
+            <span className="text-[11px] text-muted">
+              No documents processed in this session yet. Paste text, upload a file, or select a
+              synthetic sample above to begin.
             </span>
+          ) : (
             <div className="flex flex-wrap gap-2">
               {localSessions.map((sess) => (
                 <span
@@ -779,9 +472,22 @@ export const Workspace: React.FC = () => {
                 </span>
               ))}
             </div>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+      </section>
+
+      <ConfirmDialog
+        open={confirmResetOpen}
+        title="Start a new analysis?"
+        message="This clears your current document, detected findings, verification report, and temporary pseudonym mappings from memory."
+        confirmLabel="Clear & Start New"
+        onConfirm={() => {
+          setConfirmResetOpen(false);
+          executeClear();
+          window.setTimeout(() => editorRef.current?.focus(), 0);
+        }}
+        onCancel={() => setConfirmResetOpen(false)}
+      />
     </div>
   );
 };

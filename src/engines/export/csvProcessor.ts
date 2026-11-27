@@ -17,6 +17,7 @@ import {
   detectCustomPatternClues,
   sanitizeWithOptions,
 } from '../../services/sanitization/configuredSanitizer';
+import { neutralizeCsvFormulaCell } from '../../security/inputGuards';
 
 export interface CsvProcessingResult {
   originalGrid: CsvGrid;
@@ -27,6 +28,7 @@ export interface CsvProcessingResult {
   redactedDirectCount: number;
   redactedContextCount: number;
   pseudonymCount: number;
+  formulaNeutralizedCount: number;
   structureVerified: boolean;
 }
 
@@ -84,6 +86,7 @@ export function processCsvDocument(
   const allClues: ContextClue[] = [];
   let redactedDirectCount = 0;
   let redactedContextCount = 0;
+  let formulaNeutralizedCount = 0;
 
   const additionalSet = new Set(
     additionalRedactionValues.map((v) => v.trim().toLowerCase()).filter(Boolean)
@@ -148,14 +151,24 @@ export function processCsvDocument(
 
       redactedDirectCount += cellRedaction.redactedDirectCount;
       redactedContextCount += cellRedaction.redactedContextCount;
-      sanitizedRow.push(cellRedaction.sanitizedText);
+      const safeCell = neutralizeCsvFormulaCell(cellRedaction.sanitizedText);
+      if (safeCell.neutralized) {
+        formulaNeutralizedCount += 1;
+      }
+      sanitizedRow.push(safeCell.value);
     }
 
     sanitizedRows.push(sanitizedRow);
   }
 
+  const safeHeaders = originalGrid.headers.map((h) => {
+    const res = neutralizeCsvFormulaCell(h);
+    if (res.neutralized) formulaNeutralizedCount += 1;
+    return res.value;
+  });
+
   const sanitizedGrid: CsvGrid = {
-    headers: [...originalGrid.headers],
+    headers: safeHeaders,
     rows: sanitizedRows,
     fileName,
   };
@@ -194,6 +207,7 @@ export function processCsvDocument(
     redactedDirectCount,
     redactedContextCount,
     pseudonymCount: registry.size,
+    formulaNeutralizedCount,
     structureVerified,
   };
 }

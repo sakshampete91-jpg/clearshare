@@ -59,7 +59,7 @@ describe('Verification, Security, & Edge Cases', () => {
       partialTrailingDigits: 2,
       partialKeepEmailDomain: false,
     });
-    expect(partial.sanitizedText).toContain('rXXXX@eXXXX.in');
+    expect(partial.sanitizedText).toContain('r****@e****.in');
     expect(partial.sanitizedText).toContain('XXXXXXXX10');
 
     const nonConsistent = sanitizeWithOptions(text, entities, {

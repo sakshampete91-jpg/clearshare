@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Papa from 'papaparse';
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   Check,
   Copy,
@@ -18,6 +19,10 @@ import {
   copyTextToClipboard,
   downloadSanitizedFile,
 } from '../engines/export/exportFile';
+import {
+  neutralizeCsvFormulaCell,
+  sanitizeDisplayFilename,
+} from '../security/inputGuards';
 import {
   buildPrivacyAnalysisReport,
   formatPrivacyReportAsText,
@@ -47,7 +52,7 @@ export const ExportReportingPage: React.FC = () => {
     return (
       <EmptyState
         icon={Download}
-        title="Export & Reporting"
+        title="Export & Privacy Analysis Report"
         description="Process a document in Workspace before exporting sanitized TXT/CSV outputs or a non-PII privacy analysis report."
         action={
           <button
@@ -70,32 +75,44 @@ export const ExportReportingPage: React.FC = () => {
     !redactionResult ||
     !simulationResult;
 
+  const safeOriginalName = sanitizeDisplayFilename(documentSource.fileName);
+  const txtExportName = buildSafeExportFileName(documentSource.fileName, 'txt');
+  const csvExportName = buildSafeExportFileName(documentSource.fileName, 'csv');
+
   const handleDownloadTxt = () => {
     if (verificationBlocked || !redactionResult) return;
-    const fileName = buildSafeExportFileName(documentSource.fileName, 'txt');
     downloadSanitizedFile(
       redactionResult.sanitizedText,
-      fileName,
+      txtExportName,
       'text/plain;charset=utf-8'
     );
-    logAction('Sanitized TXT exported', `Downloaded ${fileName}`);
-    setBanner({ kind: 'success', message: `Downloaded ${fileName} locally.` });
+    logAction('Sanitized TXT exported', `Downloaded ${txtExportName}`);
+    setBanner({ kind: 'success', message: `Downloaded ${txtExportName} locally.` });
   };
 
   const handleDownloadCsv = () => {
     if (verificationBlocked || !redactionResult) return;
-    const fileName = buildSafeExportFileName(documentSource.fileName, 'csv');
     let csvPayload = redactionResult.sanitizedText;
+    let neutralizedCount = redactionResult.formulaNeutralizedCount ?? 0;
+
     if (!isCsvMode) {
       const lines = redactionResult.sanitizedText.split(/\r?\n/);
-      csvPayload = Papa.unparse(
-        [['Line', 'Sanitized Content'], ...lines.map((line, i) => [String(i + 1), line])],
-        { newline: '\n' }
-      );
+      neutralizedCount = 0;
+      const rows = lines.map((line, i) => {
+        const safe = neutralizeCsvFormulaCell(line);
+        if (safe.neutralized) neutralizedCount += 1;
+        return [String(i + 1), safe.value];
+      });
+      csvPayload = Papa.unparse([['Line', 'Sanitized Content'], ...rows], { newline: '\n' });
     }
-    downloadSanitizedFile(csvPayload, fileName, 'text/csv;charset=utf-8');
-    logAction('Sanitized CSV exported', `Downloaded ${fileName}`);
-    setBanner({ kind: 'success', message: `Downloaded ${fileName} locally.` });
+
+    downloadSanitizedFile(csvPayload, csvExportName, 'text/csv;charset=utf-8');
+    const note =
+      neutralizedCount > 0
+        ? ` (${neutralizedCount} formula-leading cell(s) prefixed with ' to block spreadsheet formula injection)`
+        : '';
+    logAction('Sanitized CSV exported', `Downloaded ${csvExportName}${note}`);
+    setBanner({ kind: 'success', message: `Downloaded ${csvExportName}${note}` });
   };
 
   const handleDownloadReport = (format: 'txt' | 'json') => {
@@ -120,7 +137,7 @@ export const ExportReportingPage: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       logAction('Privacy report exported', 'Downloaded clearshare-privacy-report.json (no PII)');
       return;
     }
@@ -162,12 +179,14 @@ export const ExportReportingPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-lg font-bold text-ink">Export & Privacy Analysis Report</h1>
+              <h1 className="font-heading text-lg font-bold text-ink">
+                Export & Privacy Analysis Report
+              </h1>
               <StatusPill status={verificationStatus} />
             </div>
             <p className="mt-1 text-xs text-muted">
-              Only verified outputs can be exported. Exported documents and reports never imply
-              complete anonymity.
+              Source: <strong>{safeOriginalName}</strong> · Safe outputs:{' '}
+              <code>{txtExportName}</code> / <code>{csvExportName}</code>
             </p>
           </div>
         </div>
@@ -181,6 +200,20 @@ export const ExportReportingPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {!verificationBlocked &&
+          (redactionResult?.formulaNeutralizedCount ?? 0) > 0 && (
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-[#E2C28E] bg-status-warning/55 p-3.5 text-xs text-[#664212]">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div>
+                <strong>CSV Formula Injection Protection Active:</strong>{' '}
+                {redactionResult?.formulaNeutralizedCount} cell(s) starting with spreadsheet
+                formula triggers (<code>=</code>, <code>+</code>, <code>-</code>, <code>@</code>)
+                were prefixed with <code>&apos;</code> in the sanitized CSV output so Excel/Sheets
+                cannot execute them.
+              </div>
+            </div>
+          )}
 
         {!verificationBlocked && verificationReport && simulationResult && redactionResult && (
           <>
@@ -217,7 +250,6 @@ export const ExportReportingPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Export Controls */}
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -273,7 +305,7 @@ export const ExportReportingPage: React.FC = () => {
       {!verificationBlocked && verificationReport && redactionResult && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
           <section className="cs-card p-5 lg:col-span-5">
-            <h2 className="text-sm font-bold text-ink">Verification & Residual Findings</h2>
+            <h2 className="text-sm font-bold text-ink">Verification & Export Policy</h2>
             <p className="mt-1.5 text-xs leading-relaxed text-muted">
               {verificationReport.summary}
             </p>
@@ -287,8 +319,8 @@ export const ExportReportingPage: React.FC = () => {
             <div className="mt-4 flex items-start gap-2 rounded-xl border border-[#B6D4BA] bg-sage/45 p-3 text-[11px] text-forest-hover">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
-                Reports include aggregate counts and risk summaries only — original document text
-                and pseudonym maps are never included.
+                PDF and DOCX uploads export as sanitized TXT/CSV. Exports never include original
+                PII or pseudonym tables, and never guarantee complete anonymity.
               </span>
             </div>
           </section>

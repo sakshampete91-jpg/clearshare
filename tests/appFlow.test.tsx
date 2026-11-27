@@ -90,7 +90,7 @@ describe('CLEARSHARE Redesigned Live Workspace & Pipeline', () => {
       expect(screen.getByLabelText(/sanitized output text/i)).toBeInTheDocument();
     });
 
-    const nav = screen.getByRole('navigation', { name: /primary areas/i });
+    const nav = screen.getAllByRole('navigation', { name: /primary areas/i })[0];
 
     fireEvent.click(within(nav).getByRole('button', { name: /document analysis/i }));
     expect(screen.getByRole('heading', { name: /document analysis/i })).toBeInTheDocument();
@@ -98,18 +98,23 @@ describe('CLEARSHARE Redesigned Live Workspace & Pipeline', () => {
     fireEvent.click(within(nav).getByRole('button', { name: /privacy simulator/i }));
     expect(screen.getByRole('heading', { name: /privacy exposure simulator/i })).toBeInTheDocument();
 
-    fireEvent.click(within(nav).getByRole('button', { name: /comparison & review/i }));
+    fireEvent.click(within(nav).getByRole('button', { name: /compare & review/i }));
     expect(
       screen.getByRole('heading', { name: /comparison & residual exposure review/i })
     ).toBeInTheDocument();
 
-    fireEvent.click(within(nav).getByRole('button', { name: /export & reporting/i }));
+    fireEvent.click(within(nav).getByRole('button', { name: /verification & reporting/i }));
+    expect(
+      screen.getByRole('heading', { name: /independent verification & reporting/i })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole('button', { name: /^export$/i }));
     expect(
       screen.getByRole('heading', { name: /export & privacy analysis report/i })
     ).toBeInTheDocument();
 
     // Return to Workspace and inject HTML/script text -> zero <script> tags executed/rendered
-    fireEvent.click(within(nav).getByRole('button', { name: /workspace/i }));
+    fireEvent.click(within(nav).getByRole('button', { name: /^workspace$/i }));
     const editor = screen.getByLabelText(/paste sensitive text/i);
     fireEvent.change(editor, {
       target: { value: '<script>alert(1)</script> email test@example.in' },

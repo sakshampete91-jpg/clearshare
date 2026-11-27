@@ -2,6 +2,42 @@ import type { AppErrorInfo } from '../types/clearshare';
 
 const MAX_CUSTOM_REGEX_LENGTH = 120;
 
+export function generateSecureId(prefix: string): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const buf = new Uint32Array(2);
+    crypto.getRandomValues(buf);
+    return `${prefix}-${buf[0].toString(36)}-${buf[1].toString(36)}`;
+  }
+  return `${prefix}-${Date.now().toString(36)}`;
+}
+
+export function sanitizeDisplayFilename(fileName: string | undefined): string {
+  if (!fileName) return 'Pasted text';
+  const base = fileName.split(/[/\\]/).pop() ?? 'document';
+  const cleaned = Array.from(base, (ch) => {
+    const code = ch.charCodeAt(0);
+    if (code < 32 || code === 127 || '<>:"|?*'.includes(ch)) return '_';
+    return ch;
+  }).join('');
+  return cleaned || 'document';
+}
+
+const FORMULA_LEADING_CHAR_REGEX = /^[=+\-@\t\r]/;
+
+export function neutralizeCsvFormulaCell(cellValue: string): {
+  value: string;
+  neutralized: boolean;
+} {
+  if (!cellValue) return { value: cellValue, neutralized: false };
+  if (FORMULA_LEADING_CHAR_REGEX.test(cellValue)) {
+    return { value: `'${cellValue}`, neutralized: true };
+  }
+  return { value: cellValue, neutralized: false };
+}
+
 export function validateCustomRegexPattern(pattern: string): {
   valid: boolean;
   reason?: string;
@@ -28,7 +64,6 @@ export function validateCustomRegexPattern(pattern: string): {
 
   try {
     const compiled = new RegExp(trimmed, 'g');
-    // Guard against patterns matching zero-length strings everywhere
     if (compiled.test('')) {
       return {
         valid: false,
@@ -49,12 +84,11 @@ export function buildSafeAppError(
   originalPreserved = true
 ): AppErrorInfo {
   const rawMessage = err instanceof Error ? err.message : 'Unexpected local processing error.';
-  // Truncate and avoid echoing long document fragments in error banners
   const safeMessage =
     rawMessage.length > 180 ? `${rawMessage.slice(0, 177)}...` : rawMessage;
 
   return {
-    id: `err-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: generateSecureId('err'),
     operation,
     whatHappened: safeMessage,
     originalPreserved,

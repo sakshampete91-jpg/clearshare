@@ -12,6 +12,8 @@ import {
   OPENAI_KEY_REGEX,
   PAN_REGEX,
   SECRET_ASSIGNMENT_REGEX,
+  SLACK_TOKEN_REGEX,
+  STRIPE_KEY_REGEX,
 } from './patterns';
 import {
   extractIndianPhoneDigits,
@@ -394,6 +396,28 @@ export function detectEntities(
       start,
       start + raw.length,
       'Matches Google API Key prefix (AIza + 35 characters).'
+    );
+  }
+
+  for (const match of text.matchAll(STRIPE_KEY_REGEX)) {
+    const raw = match[0];
+    const start = match.index ?? 0;
+    addSecretCandidate(
+      raw,
+      start,
+      start + raw.length,
+      'Matches Stripe secret or restricted key prefix (sk_live_/rk_live_/test).'
+    );
+  }
+
+  for (const match of text.matchAll(SLACK_TOKEN_REGEX)) {
+    const raw = match[0];
+    const start = match.index ?? 0;
+    addSecretCandidate(
+      raw,
+      start,
+      start + raw.length,
+      'Matches Slack API token prefix (xoxb-/xoxp-/xoxa-).'
     );
   }
 

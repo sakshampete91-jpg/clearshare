@@ -114,6 +114,7 @@ export function runPrivacyPipeline(input: PipelineInput): PipelineOutput {
         redactedDirectCount: csvOut.redactedDirectCount,
         redactedContextCount: csvOut.redactedContextCount,
         pseudonymCount: csvOut.pseudonymCount,
+        formulaNeutralizedCount: csvOut.formulaNeutralizedCount,
       },
       simulationResult,
       verificationReport,

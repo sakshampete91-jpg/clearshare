@@ -2,119 +2,77 @@
 
 **Know what your data reveals before you share it.**
 
-CLEARSHARE is a **client-side Privacy Intelligence & Exposure Simulation Platform**. Instead of stopping after masking direct personal identifiers, CLEARSHARE independently analyzes the *already sanitized* document to surface remaining indirect clues, explain potential linkability risks, and let users test additional redactions before sharing.
+CLEARSHARE is a **client-side Privacy Intelligence and Document Exposure Analysis platform**. Rather than stopping after masking direct personal identifiers, CLEARSHARE simulates transformation strategies, runs an **independent verification scan** on the sanitized output, explains remaining linkability risks, and exports verified sanitized documents and non-PII privacy reports.
 
 ---
 
-## Key Features
+## Core Capabilities
 
-1. **Compact Live Two-Column Workspace**
-   - Paste text directly, drag-and-drop/upload **TXT, CSV, PDF, DOCX, or JSON** documents (all parsed locally in browser memory via PDF.js, Mammoth.js, PapaParse, and native JSON), or load three discoverable synthetic chips (**HR Resume**, **Medical Note**, **Customer Support Ticket**).
-   - Instant debounced analysis updates the sanitized output, **Redaction Summary** strip, and **Privacy Risk Meter** automatically as you edit or toggle settings.
-   - Choose between three sanitization modes (**Full Mask**, **Partial Mask**, **Consistent Pseudonymization**) and toggle granular protection categories (**Emails**, **Phone Numbers**, **IP Addresses**, **PAN**, **Aadhaar-like**, **Cards**, **API Keys & Secrets**, **Names**, **Locations**, **Custom Phrases**).
+1. **Workspace**
+   - Editorial welcome & 4-stage workflow guide (`01 — Upload · 02 — Analyse · 03 — Protect · 04 — Verify`).
+   - Paste text, drag-and-drop/upload **TXT, CSV, PDF, DOCX, or JSON** locally, or load three synthetic samples (**HR Resume**, **Medical Note**, **Customer Support Ticket**).
+   - Live debounced processing with dedicated Web Worker offloading for larger documents.
+   - Memory-only recent local session metadata.
 
-2. **Hero Privacy Exposure Simulator**
-   - Prominently positioned above the sanitized output panel.
-   - Runs an **independent second scan** on the sanitized document to report exposure level (**Low**, **Moderate**, **High**), remaining direct identifiers, indirect contextual clues, **potential linkability** combinations, and one-click clue recommendations.
-   - Expandable **Inspect Evidence** view reveals the rule-based score breakdown, all contextual clues, and linkability explanations without claiming statistical certainty or guaranteed anonymity.
+2. **Document Analysis**
+   - Detects **Emails**, **Indian Mobile Numbers**, **IPv4 Addresses (0–255)**, **Indian PAN Shapes**, **Aadhaar-like 12-Digit Candidates**, **Payment Cards (Luhn Validated)**, **API Keys & Secrets** (OpenAI `sk-`, AWS `AKIA`/`ASIA`, GitHub `ghp_`/`github_pat_`, Google `AIza`, Slack `xox*`, Stripe `sk_live_`/`rk_live_`, Bearer tokens, secret assignments), and **Custom Literal/Regex Rules** (ReDoS-guarded).
+   - Honest 5-step progress indicator, searchable/filterable/sortable **Findings Table** with masked previews, and validation warnings.
 
-3. **Expandable Comparison & Entity Validation**
-   - Toggle **Expand Comparison** below the workspace for side-by-side Original vs. Sanitized highlighting, removed/remaining counts, and synchronized scrolling.
-   - Switch to the **Detected Entities** tab inside the drawer to inspect exact character offsets, duplicate normalization counts, PAN/Aadhaar format disclaimers, Luhn checksum separation, and validation warnings.
+3. **Privacy Simulator**
+   - Explore **Full Masking**, **Partial Masking**, and **Consistent Pseudonymization** alongside configurable masking characters (`*`, `X`, `#`, `•`), trailing digits (`2`/`4`), email domain masking, date-year retention, and session pseudonym consistency.
+   - Live **Privacy Risk Meter** (`Low` / `Moderate` / `High`), rule score breakdown, multi-clue linkability cards, and one-click clue recommendations.
 
-4. **Safe Export & Local Activity Log**
-   - Primary **Copy Safe Text** button, verified `.txt` / `.csv` downloads (`PapaParse` cell-level CSV sanitization with structural re-verification), and confirmed **Clear** workspace reset.
-   - Compact header **Activity** drawer records application actions only — never document text or PII.
+4. **Compare & Review**
+   - Synchronized side-by-side Original vs. Sanitized document view with category badges, transformation counts, and residual exposure explanations.
 
----
+5. **Verification & Reporting**
+   - Mandatory **Independent Output Verification** re-parses and re-scans transformed text and enforces honest statuses (`Not yet analysed`, `Processing`, `Exposure detected`, `Residual exposure detected`, `No supported patterns detected`, `Verification failed`).
 
-## Privacy & Security Architecture
-
-- **100% Browser-Only Execution:** All detection, redaction, CSV parsing, and exposure simulation run locally in React/TypeScript memory.
-- **Zero External Transmission:** No backend API, no Gemini/LLM document calls, no analytics, and locally bundled `@fontsource/inter` fonts.
-- **No Persistent Document Storage:** No `localStorage`, `sessionStorage`, or `IndexedDB` is used for document contents or pseudonym tables.
-- **Safe Rendering & CSP:** Document content is rendered as escaped React text nodes (no `dangerouslySetInnerHTML`), paired with a strict Content Security Policy in `index.html` and `nginx.conf`.
+6. **Export**
+   - Verification-gated downloads for **Sanitized TXT**, **Formula-Safe Sanitized CSV** (with leading `=`, `+`, `-`, `@`, `\t`, `\r` neutralization and user notification), **Privacy Analysis Report (TXT / JSON)**, and **Copy Safe Text**.
 
 ---
 
-## Project Structure
+## Documentation
 
-```text
-clearshare/
-├── public/
-├── src/
-│   ├── app/AppContext.tsx
-│   ├── components/
-│   │   ├── analysis/HighlightedViewer.tsx
-│   │   ├── comparison/ExpandableComparison.tsx
-│   │   ├── layout/{ActivityLogDrawer,ConfirmDialog,InfoModal,TopNav}.tsx
-│   │   └── simulator/{LinkabilityCard,PrivacyRiskMeter}.tsx
-│   ├── data/syntheticSamples.ts
-│   ├── engines/
-│   │   ├── context/detectContextClues.ts
-│   │   ├── detection/{detectEntities,patterns,validators}.ts
-│   │   ├── export/{csvProcessor,exportFile}.ts
-│   │   ├── redaction/sanitizeDocument.ts
-│   │   └── simulation/runExposureSimulation.ts
-│   ├── pages/Workspace.tsx
-│   ├── styles/tokens.css
-│   ├── types/clearshare.ts
-│   └── utils/categoryMeta.ts
-├── tests/{detection,redaction,simulation,csvProcessor,appFlow}.test.{ts,tsx}
-├── Dockerfile
-├── nginx.conf
-└── package.json
-```
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — 11-stage processing pipeline and directory structure
+- [SECURITY.md](./SECURITY.md) — Threat model, trust boundaries, XSS/CSV/ReDoS defenses, and limitations
+- [TESTING.md](./TESTING.md) — Automated test suites, commands, and fixtures
 
 ---
 
-## Local Setup & Testing
+## Local Development & Verification
 
 ```bash
-# Install dependencies
-npm install
+# Install dependencies cleanly
+npm ci
 
-# Start development server
-npm run dev
+# Start local dev server
+npm.cmd run dev -- --port 5173
 
-# Type-check TypeScript
-npm run typecheck
+# Lint (oxlint)
+npm.cmd run lint
 
-# Run automated Vitest suite
-npm run test:run
+# TypeScript strict check
+npm.cmd run typecheck
+
+# Run automated test suite (Vitest)
+npm.cmd run test:run
 
 # Build production bundle
-npm run build
+npm.cmd run build
 ```
 
 ---
 
-## Static Deployment on Google Cloud Run
+## Static Deployment (Google Cloud Run)
 
-The `Dockerfile` builds the Vite bundle and serves static files via Nginx on port `8080` with zero server-side document handling.
-
-```bash
-# 1. Authenticate and set your Google Cloud project
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-
-# 2. Enable required services
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
-
-# 3. Build and deploy directly from source via Cloud Build
-gcloud run deploy clearshare \
-  --source . \
-  --platform managed \
-  --region asia-south1 \
-  --allow-unauthenticated
-```
+CLEARSHARE ships as a static frontend via [Dockerfile](./Dockerfile) and [nginx.conf](./nginx.conf) with strict CSP (`frame-ancestors 'none'`), HSTS, `Permissions-Policy`, `Referrer-Policy`, and `X-Content-Type-Options` headers. No server ever receives document contents.
 
 ---
 
-## Hackathon Demo Flow
+## Known Limitations
 
-1. Open the live workspace and click the **Customer Support Ticket** sample chip above the input editor.
-2. Notice the sanitized output and **Privacy Risk Meter** update automatically — direct PII is masked, yet **Pune + 12 October 2026 + TKT-48291** trigger linkability warnings.
-3. Click **Apply** on the recommended clue or toggle **Names** / **Locations** in Protection Categories to see exposure drop in real time.
-4. Click **Inspect Evidence** to examine rule-based point breakdowns and linkability cards, or click **Expand Comparison** for side-by-side diff highlights and entity validation notes.
-5. Click **Copy Safe Text** (or download `.txt`/`.csv`) to share the sanitized output safely.
+- Pattern and contextual matching cannot guarantee detection of arbitrary passwords, proprietary tokens, or unstructured prose PII.
+- PAN, Aadhaar-like, and Luhn checks verify format/math only — never official government issuance or active card status.
+- `"No supported patterns detected"` does not prove formal cryptographic or statistical anonymization.

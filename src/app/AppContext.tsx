@@ -26,10 +26,16 @@ import type { RedactionSpan } from '../engines/redaction/sanitizeDocument';
 import { extractDocumentFromFile } from '../engines/export/documentExtractor';
 import {
   buildSafeAppError,
+  generateSecureId,
+  sanitizeDisplayFilename,
   validateCustomRegexPattern,
 } from '../security/inputGuards';
 import { DEFAULT_SANITIZATION_OPTIONS } from '../services/sanitization/configuredSanitizer';
-import { runPrivacyPipeline } from '../services/pipeline/pipelineOrchestrator';
+import {
+  runPrivacyPipeline,
+  type PipelineInput,
+  type PipelineOutput,
+} from '../services/pipeline/pipelineOrchestrator';
 
 export const DEFAULT_ENABLED_DIRECT: EntityCategory[] = [
   'EMAIL',
@@ -47,6 +53,15 @@ export const DEFAULT_ENABLED_CONTEXT: ContextClueCategory[] = [
   'CUSTOM_PHRASE',
 ];
 
+export type AnalysisProgressStep =
+  | 'idle'
+  | 'Validating input'
+  | 'Parsing document'
+  | 'Scanning supported patterns'
+  | 'Analysing exposure'
+  | 'Preparing findings'
+  | 'Complete';
+
 interface StatusBanner {
   kind: 'info' | 'success' | 'warning' | 'error';
   message: string;
@@ -58,6 +73,7 @@ interface AppContextValue {
   rawText: string;
   setRawText: (text: string) => void;
   documentSource: DocumentSource;
+  fileSizeBytes: number | null;
   csvGrid: CsvGrid | null;
   sanitizationMode: SanitizationMode;
   setSanitizationMode: (mode: SanitizationMode) => void;
@@ -68,13 +84,18 @@ interface AppContextValue {
   enabledContextCategories: ContextClueCategory[];
   toggleContextCategory: (category: ContextClueCategory) => void;
   customRules: CustomPatternRule[];
-  addCustomRule: (pattern: string, kind: 'literal' | 'regex', label?: string) => { ok: boolean; error?: string };
+  addCustomRule: (
+    pattern: string,
+    kind: 'literal' | 'regex',
+    label?: string
+  ) => { ok: boolean; error?: string };
   removeCustomRule: (id: string) => void;
   additionalRedactions: string[];
   toggleAdditionalRedaction: (value: string) => void;
   applySingleRecommendation: (value: string) => void;
   hasAnalyzed: boolean;
   isProcessing: boolean;
+  analysisStep: AnalysisProgressStep;
   isCsvMode: boolean;
   detectedEntities: DetectedEntity[];
   detectionWarnings: DetectionWarning[];
@@ -94,6 +115,7 @@ interface AppContextValue {
   clearAppError: () => void;
   loadSample: (sampleId: string) => void;
   loadUploadedFile: (file: File) => Promise<void>;
+  rerunAnalysisNow: () => void;
   clearAllData: () => void;
   logAction: (action: string, detail: string) => void;
   setBanner: (banner: StatusBanner | null) => void;
@@ -110,14 +132,13 @@ function createTimestamp(): string {
   });
 }
 
-function makeId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
+const WORKER_THRESHOLD_CHARS = 8000;
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeScreen, setActiveScreen] = useState<ScreenId>('workspace');
   const [rawText, setRawTextState] = useState<string>('');
   const [documentSource, setDocumentSource] = useState<DocumentSource>({ kind: 'paste' });
+  const [fileSizeBytes, setFileSizeBytes] = useState<number | null>(null);
   const [csvGrid, setCsvGrid] = useState<CsvGrid | null>(null);
   const [sanitizationOptions, setSanitizationOptions] = useState<SanitizationOptions>(
     DEFAULT_SANITIZATION_OPTIONS
@@ -133,6 +154,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [hasAnalyzed, setHasAnalyzed] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [analysisStep, setAnalysisStep] = useState<AnalysisProgressStep>('idle');
   const [isCsvMode, setIsCsvMode] = useState<boolean>(false);
   const [detectedEntities, setDetectedEntities] = useState<DetectedEntity[]>([]);
   const [detectionWarnings, setDetectionWarnings] = useState<DetectionWarning[]>([]);
@@ -145,10 +167,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     useState<VerificationStatus>('Not yet analysed');
   const [verificationReport, setVerificationReport] = useState<VerificationReport | null>(null);
   const [csvStructureVerified, setCsvStructureVerified] = useState<boolean>(false);
+  const [rerunCounter, setRerunCounter] = useState<number>(0);
 
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([
     {
-      id: makeId('log'),
+      id: generateSecureId('log'),
       timestamp: createTimestamp(),
       action: 'Session initialized',
       detail: 'Local browser-only workspace ready. Zero external transmission.',
@@ -157,11 +180,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [localSessions, setLocalSessions] = useState<LocalSessionSummary[]>([]);
   const [statusBanner, setStatusBanner] = useState<StatusBanner | null>(null);
   const [appError, setAppError] = useState<AppErrorInfo | null>(null);
+
   const lastLoggedSignatureRef = useRef<string>('');
+  const workerRef = useRef<Worker | null>(null);
 
   const logAction = useCallback((action: string, detail: string) => {
     setActivityLog((prev) => [
-      { id: makeId('log'), timestamp: createTimestamp(), action, detail },
+      { id: generateSecureId('log'), timestamp: createTimestamp(), action, detail },
       ...prev.slice(0, 59),
     ]);
   }, []);
@@ -170,6 +195,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRawTextState(text);
     setAppError(null);
     setSimulationHistory([]);
+    if (!text.trim()) {
+      setFileSizeBytes(null);
+    }
   }, []);
 
   const setDocumentInputMeta = useCallback((source: DocumentSource, grid: CsvGrid | null) => {
@@ -244,7 +272,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return [
           ...prev,
           {
-            id: makeId('rule'),
+            id: generateSecureId('rule'),
             label: label?.trim() || (kind === 'regex' ? 'Custom Regex' : trimmed),
             pattern: trimmed,
             kind,
@@ -281,10 +309,116 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [logAction]
   );
 
+  const applyPipelineSuccess = useCallback(
+    (out: PipelineOutput, inputText: string, sourceMeta: DocumentSource) => {
+      setAnalysisStep('Preparing findings');
+      setHasAnalyzed(true);
+      setIsCsvMode(out.isCsvMode);
+      setCsvGrid(out.csvGrid);
+      setCsvStructureVerified(out.csvStructureVerified);
+      setDetectedEntities(out.detectedEntities);
+      setDetectionWarnings(out.detectionWarnings);
+      setContextClues(out.contextClues);
+      setAppliedSpans(out.appliedSpans);
+      setRedactionResult(out.redactionResult);
+      setSimulationResult(out.simulationResult);
+      setVerificationReport(out.verificationReport);
+      setVerificationStatus(out.verificationReport.status);
+      setAppError(null);
+      setAnalysisStep('Complete');
+      setIsProcessing(false);
+
+      setSimulationHistory((prev) => {
+        const last = prev[prev.length - 1];
+        if (
+          last &&
+          last.scorePoints === out.simulationResult.scorePoints &&
+          last.mode === sanitizationOptions.mode &&
+          last.additionalRedactionsCount === additionalRedactions.length
+        ) {
+          return prev;
+        }
+        return [
+          ...prev.slice(-9),
+          {
+            runNumber: prev.length + 1,
+            level: out.simulationResult.level,
+            scorePoints: out.simulationResult.scorePoints,
+            remainingDirectCount: out.simulationResult.remainingDirectEntities.length,
+            remainingClueCount: out.simulationResult.remainingContextClues.length,
+            linkabilityCount: out.simulationResult.linkabilityFindings.length,
+            mode: sanitizationOptions.mode,
+            additionalRedactionsCount: additionalRedactions.length,
+          },
+        ];
+      });
+
+      const sig = `${inputText.length}|${out.detectedEntities.length}|${out.verificationReport.status}|${sanitizationOptions.mode}`;
+      if (lastLoggedSignatureRef.current !== sig) {
+        lastLoggedSignatureRef.current = sig;
+        logAction(
+          'Pipeline & independent verification completed',
+          `${out.detectedEntities.length} direct, ${out.contextClues.length} clues · ${out.verificationReport.status}`
+        );
+        const sourceLabel = sanitizeDisplayFilename(
+          sourceMeta.fileName ?? (sourceMeta.kind === 'paste' ? 'Pasted text' : sourceMeta.kind)
+        );
+        setLocalSessions((prev) => [
+          {
+            id: generateSecureId('sess'),
+            timestamp: createTimestamp(),
+            sourceLabel,
+            mode: sanitizationOptions.mode,
+            detectedCount: out.detectedEntities.length + out.contextClues.length,
+            redactedCount:
+              out.redactionResult.redactedDirectCount + out.redactionResult.redactedContextCount,
+            verificationStatus: out.verificationReport.status,
+          },
+          ...prev.slice(0, 4),
+        ]);
+      }
+    },
+    [sanitizationOptions.mode, additionalRedactions.length, logAction]
+  );
+
+  const applyPipelineFailure = useCallback(
+    (err: unknown) => {
+      setAnalysisStep('idle');
+      setIsProcessing(false);
+      setVerificationStatus('Verification failed');
+      setVerificationReport({
+        status: 'Verification failed',
+        passed: false,
+        verifiedAt: createTimestamp(),
+        originalDirectCount: 0,
+        originalClueCount: 0,
+        remainingDirectCount: 0,
+        remainingClueCount: 0,
+        residualPatterns: ['Pipeline execution failed before verification completed.'],
+        structuralCheckPassed: false,
+        summary:
+          'Verification failed (fail-closed). Export actions are disabled until the document processes cleanly.',
+        recommendations: ['Inspect input format or reset custom rules, then try again.'],
+      });
+      setRedactionResult(null);
+      setAppError(
+        buildSafeAppError(
+          'Privacy pipeline',
+          err,
+          'Inspect your document format and retry. Your original input is preserved.',
+          true
+        )
+      );
+      logAction('Pipeline failure (fail-closed)', 'Original input preserved; exports blocked');
+    },
+    [logAction]
+  );
+
   useEffect(() => {
     if (!rawText.trim()) {
       setHasAnalyzed(false);
       setIsProcessing(false);
+      setAnalysisStep('idle');
       setIsCsvMode(false);
       setCsvGrid(null);
       setCsvStructureVerified(false);
@@ -300,118 +434,90 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
+    let cancelled = false;
     setIsProcessing(true);
     setVerificationStatus('Processing');
+    setAnalysisStep('Validating input');
 
     const timer = window.setTimeout(() => {
-      try {
-        const out = runPrivacyPipeline({
-          text: rawText,
-          source: documentSource,
-          options: sanitizationOptions,
-          enabledDirectCategories,
-          enabledContextCategories,
-          customRules,
-          additionalRedactions,
-        });
+      if (cancelled) return;
+      const input: PipelineInput = {
+        text: rawText,
+        source: documentSource,
+        options: sanitizationOptions,
+        enabledDirectCategories,
+        enabledContextCategories,
+        customRules,
+        additionalRedactions,
+      };
 
-        setHasAnalyzed(true);
-        setIsCsvMode(out.isCsvMode);
-        setCsvGrid(out.csvGrid);
-        setCsvStructureVerified(out.csvStructureVerified);
-        setDetectedEntities(out.detectedEntities);
-        setDetectionWarnings(out.detectionWarnings);
-        setContextClues(out.contextClues);
-        setAppliedSpans(out.appliedSpans);
-        setRedactionResult(out.redactionResult);
-        setSimulationResult(out.simulationResult);
-        setVerificationReport(out.verificationReport);
-        setVerificationStatus(out.verificationReport.status);
-        setAppError(null);
+      setAnalysisStep('Scanning supported patterns');
 
-        setSimulationHistory((prev) => {
-          const last = prev[prev.length - 1];
-          if (
-            last &&
-            last.scorePoints === out.simulationResult.scorePoints &&
-            last.mode === sanitizationOptions.mode &&
-            last.additionalRedactionsCount === additionalRedactions.length
-          ) {
-            return prev;
+      // Use dedicated Web Worker for larger documents when supported in browser
+      if (rawText.length >= WORKER_THRESHOLD_CHARS && typeof Worker !== 'undefined') {
+        try {
+          if (workerRef.current) {
+            workerRef.current.terminate();
           }
-          return [
-            ...prev.slice(-9),
-            {
-              runNumber: prev.length + 1,
-              level: out.simulationResult.level,
-              scorePoints: out.simulationResult.scorePoints,
-              remainingDirectCount: out.simulationResult.remainingDirectEntities.length,
-              remainingClueCount: out.simulationResult.remainingContextClues.length,
-              linkabilityCount: out.simulationResult.linkabilityFindings.length,
-              mode: sanitizationOptions.mode,
-              additionalRedactionsCount: additionalRedactions.length,
-            },
-          ];
-        });
-
-        const sig = `${rawText.length}|${out.detectedEntities.length}|${out.verificationReport.status}|${sanitizationOptions.mode}`;
-        if (lastLoggedSignatureRef.current !== sig) {
-          lastLoggedSignatureRef.current = sig;
-          logAction(
-            'Pipeline & independent verification completed',
-            `${out.detectedEntities.length} direct, ${out.contextClues.length} clues · ${out.verificationReport.status}`
+          const worker = new Worker(
+            new URL('../workers/documentProcessing.worker.ts', import.meta.url),
+            { type: 'module' }
           );
-          const sourceLabel =
-            documentSource.fileName ??
-            (documentSource.kind === 'paste' ? 'Pasted text' : documentSource.kind);
-          setLocalSessions((prev) => [
-            {
-              id: makeId('sess'),
-              timestamp: createTimestamp(),
-              sourceLabel,
-              mode: sanitizationOptions.mode,
-              detectedCount: out.detectedEntities.length + out.contextClues.length,
-              redactedCount:
-                out.redactionResult.redactedDirectCount +
-                out.redactionResult.redactedContextCount,
-              verificationStatus: out.verificationReport.status,
-            },
-            ...prev.slice(0, 4),
-          ]);
+          workerRef.current = worker;
+          const reqId = generateSecureId('req');
+
+          worker.onmessage = (
+            evt: MessageEvent<{
+              requestId: string;
+              ok: boolean;
+              result?: PipelineOutput;
+              error?: string;
+            }>
+          ) => {
+            if (cancelled || evt.data.requestId !== reqId) return;
+            setAnalysisStep('Analysing exposure');
+            if (evt.data.ok && evt.data.result) {
+              applyPipelineSuccess(evt.data.result, rawText, documentSource);
+            } else {
+              applyPipelineFailure(new Error(evt.data.error || 'Worker failed.'));
+            }
+          };
+
+          worker.onerror = () => {
+            if (cancelled) return;
+            // Graceful fallback to synchronous execution if worker fails to load
+            try {
+              const out = runPrivacyPipeline(input);
+              applyPipelineSuccess(out, rawText, documentSource);
+            } catch (syncErr) {
+              applyPipelineFailure(syncErr);
+            }
+          };
+
+          worker.postMessage({ requestId: reqId, input });
+          return;
+        } catch {
+          // Fall back to synchronous execution below
+        }
+      }
+
+      try {
+        setAnalysisStep('Analysing exposure');
+        const out = runPrivacyPipeline(input);
+        if (!cancelled) {
+          applyPipelineSuccess(out, rawText, documentSource);
         }
       } catch (err) {
-        // Fail-closed: preserve original input and mark verification failed
-        setVerificationStatus('Verification failed');
-        setVerificationReport({
-          status: 'Verification failed',
-          passed: false,
-          verifiedAt: createTimestamp(),
-          originalDirectCount: 0,
-          originalClueCount: 0,
-          remainingDirectCount: 0,
-          remainingClueCount: 0,
-          residualPatterns: ['Pipeline execution failed before verification completed.'],
-          structuralCheckPassed: false,
-          summary:
-            'Verification failed (fail-closed). Export actions are disabled until the document processes cleanly.',
-          recommendations: ['Inspect input format or reset custom rules, then try again.'],
-        });
-        setRedactionResult(null);
-        setAppError(
-          buildSafeAppError(
-            'Privacy pipeline',
-            err,
-            'Inspect your document format (or switch CSV/TXT mode) and retry. Your original input is preserved.',
-            true
-          )
-        );
-        logAction('Pipeline failure (fail-closed)', 'Original input preserved; exports blocked');
-      } finally {
-        setIsProcessing(false);
+        if (!cancelled) {
+          applyPipelineFailure(err);
+        }
       }
     }, 90);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [
     rawText,
     documentSource,
@@ -420,8 +526,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     enabledContextCategories,
     customRules,
     additionalRedactions,
-    logAction,
+    rerunCounter,
+    applyPipelineSuccess,
+    applyPipelineFailure,
   ]);
+
+  useEffect(() => {
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+    };
+  }, []);
 
   const loadSample = useCallback(
     (sampleId: string) => {
@@ -432,6 +549,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSimulationHistory([]);
       setEnabledDirectCategories(DEFAULT_ENABLED_DIRECT);
       setEnabledContextCategories(DEFAULT_ENABLED_CONTEXT);
+      setFileSizeBytes(new TextEncoder().encode(sample.content).length);
       setDocumentSource({
         kind: sample.format === 'csv' ? 'csv' : 'sample',
         fileName: `${sample.id}.${sample.format}`,
@@ -447,19 +565,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loadUploadedFile = useCallback(
     async (file: File) => {
       setAppError(null);
+      setAnalysisStep('Parsing document');
       try {
         setIsProcessing(true);
         const extracted = await extractDocumentFromFile(file);
         setAdditionalRedactions([]);
         setSimulationHistory([]);
-        setDocumentSource(extracted.source);
+        setFileSizeBytes(file.size);
+        setDocumentSource({
+          ...extracted.source,
+          fileName: sanitizeDisplayFilename(extracted.source.fileName),
+        });
         setRawTextState(extracted.text);
         if (extracted.notice) {
           setStatusBanner({ kind: 'info', message: extracted.notice });
         } else {
           setStatusBanner({
             kind: 'success',
-            message: `Loaded ${file.name} locally in browser memory.`,
+            message: `Loaded ${sanitizeDisplayFilename(file.name)} locally in browser memory.`,
           });
         }
         logAction(
@@ -467,6 +590,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           `Extracted ${extracted.text.length} chars locally`
         );
       } catch (err) {
+        setAnalysisStep('idle');
         setAppError(
           buildSafeAppError(
             'Document upload & parsing',
@@ -483,9 +607,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [logAction, rawText]
   );
 
+  const rerunAnalysisNow = useCallback(() => {
+    setRerunCounter((c) => c + 1);
+  }, []);
+
   const clearAllData = useCallback(() => {
+    if (workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
+    }
     setRawTextState('');
     setDocumentSource({ kind: 'paste' });
+    setFileSizeBytes(null);
     setCsvGrid(null);
     setIsCsvMode(false);
     setCsvStructureVerified(false);
@@ -494,6 +627,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEnabledDirectCategories(DEFAULT_ENABLED_DIRECT);
     setEnabledContextCategories(DEFAULT_ENABLED_CONTEXT);
     setHasAnalyzed(false);
+    setAnalysisStep('idle');
     setDetectedEntities([]);
     setDetectionWarnings([]);
     setContextClues([]);
@@ -511,7 +645,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     setActivityLog([
       {
-        id: makeId('log'),
+        id: generateSecureId('log'),
         timestamp: createTimestamp(),
         action: 'Workspace cleared',
         detail: 'All in-memory document content and pseudonym maps discarded.',
@@ -527,6 +661,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rawText,
         setRawText,
         documentSource,
+        fileSizeBytes,
         csvGrid,
         sanitizationMode: sanitizationOptions.mode,
         setSanitizationMode,
@@ -544,6 +679,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         applySingleRecommendation,
         hasAnalyzed,
         isProcessing,
+        analysisStep,
         isCsvMode,
         detectedEntities,
         detectionWarnings,
@@ -563,6 +699,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearAppError: () => setAppError(null),
         loadSample,
         loadUploadedFile,
+        rerunAnalysisNow,
         clearAllData,
         logAction,
         setBanner: setStatusBanner,

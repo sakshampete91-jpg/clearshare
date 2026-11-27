@@ -6,7 +6,13 @@ import { SANITIZATION_MODE_META } from '../utils/categoryMeta';
 import { PrivacyRiskMeter } from '../components/simulator/PrivacyRiskMeter';
 import { EmptyState } from '../components/ui/EmptyState';
 
-const MASK_CHARS: MaskingChar[] = ['*', 'X', '#', '•'];
+const MASK_CHARS: { value: MaskingChar; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: '*', label: '*' },
+  { value: 'X', label: 'X' },
+  { value: '#', label: '#' },
+  { value: '•', label: '•' },
+];
 
 export const PrivacySimulatorPage: React.FC = () => {
   const {
@@ -103,19 +109,19 @@ export const PrivacySimulatorPage: React.FC = () => {
 
             <div>
               <span className="block text-[11px] font-medium text-muted">Masking Character</span>
-              <div className="mt-1.5 flex gap-2">
-                {MASK_CHARS.map((ch) => (
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {MASK_CHARS.map((item) => (
                   <button
-                    key={ch}
+                    key={item.value}
                     type="button"
-                    onClick={() => updateSanitizationOptions({ maskChar: ch })}
-                    className={`cs-focus-ring h-8 w-10 rounded-lg border font-mono text-xs font-bold ${
-                      sanitizationOptions.maskChar === ch
+                    onClick={() => updateSanitizationOptions({ maskChar: item.value })}
+                    className={`cs-focus-ring h-8 min-w-[40px] rounded-lg border px-2.5 font-mono text-xs font-bold ${
+                      sanitizationOptions.maskChar === item.value
                         ? 'border-royal bg-royal text-surface'
                         : 'border-warm-border bg-surface text-ink hover:bg-cream'
                     }`}
                   >
-                    {ch}
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -145,7 +151,11 @@ export const PrivacySimulatorPage: React.FC = () => {
                         : 'border-warm-border bg-surface text-ink'
                     }`}
                   >
-                    Repeated {sanitizationOptions.maskChar.repeat(4)}
+                    Repeated{' '}
+                    {(sanitizationOptions.maskChar === 'auto'
+                      ? '*'
+                      : sanitizationOptions.maskChar
+                    ).repeat(4)}
                   </button>
                 </div>
               </div>
