@@ -51,6 +51,7 @@ const ENTITY_PSEUDONYM_PREFIX: Record<EntityCategory, string> = {
   PAN: 'PAN',
   AADHAAR: 'AADHAAR',
   CARD: 'CARD',
+  API_KEY: 'SECRET',
 };
 
 const CLUE_PSEUDONYM_PREFIX: Record<ContextClueCategory, string> = {
@@ -100,6 +101,10 @@ export function formatPartialMask(category: EntityCategory, rawValue: string): s
       const parts = rawValue.split('.');
       if (parts.length !== 4) return '[REDACTED]';
       return `xxx.xxx.xxx.${parts[3]}`;
+    }
+    case 'API_KEY': {
+      const last4 = rawValue.slice(-4);
+      return `****${last4}`;
     }
   }
 }

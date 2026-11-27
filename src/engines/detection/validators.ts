@@ -88,3 +88,36 @@ export function isValidLuhn(digitsOnly: string): boolean {
 
   return sum % 10 === 0;
 }
+
+const PLACEHOLDER_SECRET_WORDS = new Set([
+  'your_api_key',
+  'your-api-key',
+  'your_secret_key',
+  'your_access_token',
+  'example_secret',
+  'placeholder',
+  'changeme',
+  'redacted',
+  'dummy_secret',
+]);
+
+export function isLikelySecretAssignmentValue(candidate: string): boolean {
+  const trimmed = candidate.trim();
+  if (trimmed.length < 16) return false;
+  const lower = trimmed.toLowerCase();
+  if (PLACEHOLDER_SECRET_WORDS.has(lower)) return false;
+  if (/^(your_|example|placeholder|changeme|dummy|test_only|sample_)/i.test(trimmed)) {
+    return false;
+  }
+  if (/^\*+$/.test(trimmed)) return false;
+  if (/^(.)\1+$/.test(trimmed)) return false;
+
+  // Require either long token (>=24 chars) or mixed character classes (avoid plain English words)
+  let classes = 0;
+  if (/[a-z]/.test(trimmed)) classes += 1;
+  if (/[A-Z]/.test(trimmed)) classes += 1;
+  if (/\d/.test(trimmed)) classes += 1;
+  if (/[._~+/=-]/.test(trimmed)) classes += 1;
+
+  return classes >= 2 || trimmed.length >= 24;
+}

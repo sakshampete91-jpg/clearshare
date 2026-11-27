@@ -43,4 +43,24 @@ describe('Sanitization Engine', () => {
     );
     expect(registry.size).toBe(3);
   });
+
+  it('sanitizes API keys and secrets across Full Mask, Partial Mask, and Pseudonymize modes', () => {
+    const text =
+      'Primary key: sk-proj-abc1234567890xyz9876543210 | Repeat: sk-proj-abc1234567890xyz9876543210 | AWS: AKIAIOSFODNN7EXAMPLE';
+    const { entities } = detectEntities(text);
+
+    const full = sanitizeText(text, entities, 'full_mask');
+    expect(full.sanitizedText).toBe(
+      'Primary key: [REDACTED] | Repeat: [REDACTED] | AWS: [REDACTED]'
+    );
+
+    const partial = sanitizeText(text, entities, 'partial_mask');
+    expect(partial.sanitizedText).toContain('****3210');
+    expect(partial.sanitizedText).toContain('****MPLE');
+
+    const pseudo = sanitizeText(text, entities, 'pseudonymize');
+    expect(pseudo.sanitizedText).toBe(
+      'Primary key: SECRET_01 | Repeat: SECRET_01 | AWS: SECRET_02'
+    );
+  });
 });

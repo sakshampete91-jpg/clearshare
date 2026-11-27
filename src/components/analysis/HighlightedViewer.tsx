@@ -1,6 +1,6 @@
 import React from 'react';
 import type { DetectedEntity } from '../../types/clearshare';
-import { ENTITY_CATEGORY_META } from '../../utils/categoryMeta';
+import { ENTITY_CATEGORY_META, formatSafeEntityPreview } from '../../utils/categoryMeta';
 
 interface HighlightedViewerProps {
   text: string;
@@ -33,6 +33,10 @@ export const HighlightedViewer: React.FC<HighlightedViewerProps> = ({
 
     const meta = ENTITY_CATEGORY_META[entity.category];
     const isSelected = selectedEntityId === entity.id;
+    const displayValue = formatSafeEntityPreview(
+      entity.category,
+      text.slice(entity.start, entity.end)
+    );
 
     segments.push(
       <button
@@ -44,7 +48,7 @@ export const HighlightedViewer: React.FC<HighlightedViewerProps> = ({
           meta.highlightBg
         } ${isSelected ? 'ring-2 ring-[#26352D] ring-offset-1' : 'hover:opacity-90'}`}
       >
-        <span>{text.slice(entity.start, entity.end)}</span>
+        <span>{displayValue}</span>
         <span className="rounded bg-[#FFFFFF]/75 px-1 text-[10px] font-semibold uppercase tracking-tight">
           {meta.shortLabel}
         </span>

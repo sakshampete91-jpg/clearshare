@@ -32,38 +32,52 @@ describe('CLEARSHARE Redesigned Live Workspace & Pipeline', () => {
     }
   });
 
-  it('updates sanitized output, Privacy Risk Meter, and expandable comparison automatically on sample load', async () => {
+  it('sanitizes Names, Locations, and API Keys by default, updates Redaction Summary, masks secrets in diagnostics, and clears cleanly', async () => {
     render(<App />);
 
-    // Click Customer Support Ticket chip directly above editor
+    // Click Customer Support Ticket sample chip
     fireEvent.click(screen.getByRole('button', { name: /customer support ticket/i }));
 
-    // Instant live pipeline updates output & Privacy Risk Meter automatically
     await waitFor(() => {
       const output = screen.getByLabelText(/sanitized output text/i);
       expect(output.textContent).toContain('[REDACTED]');
+      // Direct PII, API key, Name, and Location are all sanitized by default
       expect(output.textContent).not.toContain('rahul.sharma@example.in');
+      expect(output.textContent).not.toContain('sk-proj-synthetic99demoKeyForClearshareTest01');
+      expect(output.textContent).not.toContain('Rahul Sharma');
+      expect(output.textContent).not.toContain('Pune');
     });
 
-    const riskMeter = screen.getByLabelText(/privacy risk meter/i);
-    expect(riskMeter).toHaveTextContent(/privacy exposure/i);
-    expect(riskMeter).toHaveTextContent(/remaining identifier/i);
+    // Redaction Summary strip shows real counts including API Keys, Names, Locations
+    const summary = screen.getByLabelText(/redaction summary/i);
+    expect(summary).toHaveTextContent(/Emails/i);
+    expect(summary).toHaveTextContent(/API Keys/i);
+    expect(summary).toHaveTextContent(/Names/i);
+    expect(summary).toHaveTextContent(/Locations/i);
 
-    // Switch mode to Pseudonymize -> updates output automatically
-    fireEvent.click(screen.getByRole('radio', { name: /pseudonymize/i }));
-    await waitFor(() => {
-      const output = screen.getByLabelText(/sanitized output text/i);
-      expect(output.textContent).toContain('EMAIL_01');
-    });
-
-    // Expand Comparison -> renders side-by-side diff and Detected Entities tab
+    // Expand Comparison -> check Detected Entities does NOT expose raw API secret
     fireEvent.click(screen.getByRole('button', { name: /expand comparison/i }));
-    expect(screen.getByText(/Side-by-Side Comparison/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /detected entities/i }));
+    const comparisonPanel = screen.getByLabelText(/expanded comparison and detection details/i);
+    expect(comparisonPanel.textContent).not.toContain(
+      'sk-proj-synthetic99demoKeyForClearshareTest01'
+    );
+    expect(comparisonPanel.textContent).toContain('SECRET ••••st01');
 
-    // Open Activity Log and verify no raw PII leaked
+    // Clear button at Input Document header resets input, output, summary, and comparison
+    fireEvent.click(screen.getByRole('button', { name: /clear workspace/i }));
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/sanitized output text/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText(/expanded comparison and detection details/i)
+      ).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/redaction summary/i)).toHaveTextContent(/0 items redacted/i);
+    });
+
+    // Activity Log contains zero PII or secrets
     fireEvent.click(screen.getByRole('button', { name: /open activity log/i }));
     const dialog = screen.getByRole('dialog', { name: /local activity log/i });
     expect(dialog.textContent).not.toContain('rahul.sharma@example.in');
-    expect(dialog.textContent).not.toContain('ABCDE1234F');
+    expect(dialog.textContent).not.toContain('sk-proj-synthetic99demoKeyForClearshareTest01');
   });
 });

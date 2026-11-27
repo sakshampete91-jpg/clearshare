@@ -10,7 +10,11 @@ import {
   Square,
 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
-import { CONTEXT_CLUE_META, ENTITY_CATEGORY_META } from '../../utils/categoryMeta';
+import {
+  CONTEXT_CLUE_META,
+  ENTITY_CATEGORY_META,
+  formatSafeEntityPreview,
+} from '../../utils/categoryMeta';
 import { LinkabilityCard } from './LinkabilityCard';
 
 export const PrivacyRiskMeter: React.FC = () => {
@@ -209,7 +213,8 @@ export const PrivacyRiskMeter: React.FC = () => {
                     key={ent.id}
                     className="rounded border border-[#DFB3AC] bg-[#F4DAD6] px-2 py-0.5 font-mono text-[11px] text-[#732820]"
                   >
-                    {ENTITY_CATEGORY_META[ent.category].shortLabel}: {ent.rawValue}
+                    {ENTITY_CATEGORY_META[ent.category].shortLabel}:{' '}
+                    {formatSafeEntityPreview(ent.category, ent.rawValue)}
                   </span>
                 ))}
               </div>

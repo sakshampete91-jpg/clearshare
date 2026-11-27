@@ -4,6 +4,7 @@ import { useApp } from '../../app/AppContext';
 import {
   CONTEXT_CLUE_META,
   ENTITY_CATEGORY_META,
+  formatSafeEntityPreview,
 } from '../../utils/categoryMeta';
 import type { RedactionSpan } from '../../engines/redaction/sanitizeDocument';
 import type { ContextClue, DetectedEntity } from '../../types/clearshare';
@@ -341,7 +342,7 @@ export const ExpandableComparison: React.FC<ExpandableComparisonProps> = ({
                             {meta.shortLabel}
                           </span>
                           <span className="font-mono font-semibold text-[#26352D]">
-                            {ent.rawValue}
+                            {formatSafeEntityPreview(ent.category, ent.rawValue)}
                           </span>
                         </div>
                         <span className="text-[11px] text-[#5B6058]">

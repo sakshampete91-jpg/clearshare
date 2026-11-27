@@ -4,7 +4,8 @@ export type EntityCategory =
   | 'IPV4'
   | 'PAN'
   | 'AADHAAR'
-  | 'CARD';
+  | 'CARD'
+  | 'API_KEY';
 
 export type SanitizationMode =
   | 'full_mask'
@@ -111,7 +112,7 @@ export interface CsvGrid {
 }
 
 export interface DocumentSource {
-  kind: 'paste' | 'txt' | 'csv' | 'sample';
+  kind: 'paste' | 'txt' | 'csv' | 'pdf' | 'docx' | 'json' | 'sample';
   fileName?: string;
   sampleId?: string;
 }

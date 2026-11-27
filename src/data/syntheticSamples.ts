@@ -6,7 +6,7 @@ export const SYNTHETIC_SAMPLES: SyntheticSample[] = [
     title: 'HR Resume',
     category: 'Recruitment & Screening',
     description:
-      'Synthetic candidate profile with contact details, PAN, Aadhaar-like reference, locations, and employer history.',
+      'Synthetic candidate profile with contact details, PAN, Aadhaar-like reference, GitHub token, locations, and employer history.',
     format: 'txt',
     content: `Candidate: Meera Nair
 Email: meera.nair@talentmail.org
@@ -21,6 +21,7 @@ Tax & Identity Records (Synthetic):
 - PAN Candidate: ABCPN5678G
 - Aadhaar-like Ref: 3456 7890 1234
 - Remote Portal IP: 203.0.113.45
+- Accidental CI Token in Portfolio: ghp_SyntheticDemoTokenForClearshareTest9901
 
 Reimbursement Note:
 Travel reimbursement requested on card 4532 0151 1283 0366 for Kochi onboarding panel.`,
@@ -55,7 +56,7 @@ Vikram Kulkarni visited the Bengaluru outpatient desk on 21 October 2026 for a f
     title: 'Customer Support Ticket',
     category: 'Finance & Billing Support',
     description:
-      'Synthetic payment dispute ticket containing direct PII, valid/invalid card candidates, PAN, and linkable clues.',
+      'Synthetic payment dispute ticket containing direct PII, API key leak, valid/invalid card candidates, PAN, and linkable clues.',
     format: 'txt',
     content: `Ticket: TKT-48291 | Date: 12 October 2026
 Organization: FinEdge Payments Pvt Ltd
@@ -66,12 +67,13 @@ Email: rahul.sharma@example.in (CC: rahul.sharma@example.in)
 Phone: +91 98765-43210
 Account Reference: ACCT-77410
 
-Verification Snapshot:
+Verification & Debug Payload:
 - PAN Candidate: ABCDE1234F
 - Aadhaar-like ID: 2345 6789 0123
 - Login IPv4: 192.168.14.28
 - Card (Valid Luhn): 4532 0151 1283 0366
 - Card Typo (Invalid Luhn): 4532 0151 1283 0367
+- Pasted Webhook Secret: sk-proj-synthetic99demoKeyForClearshareTest01
 
 Follow-up: Escalate to Senior Fraud Operations Analyst in Pune under TKT-48291.`,
   },

@@ -65,7 +65,22 @@ export const ENTITY_CATEGORY_META: Record<EntityCategory, CategoryMeta> = {
     badgeBorder: 'border-[#D9BED0]',
     highlightBg: 'bg-[#F1E4EA] text-[#682948] border-b-2 border-[#8E4168]',
   },
+  API_KEY: {
+    label: 'API Keys & Secrets',
+    shortLabel: 'API Key',
+    description: 'Known token prefixes (sk-, AKIA, ghp_, AIza), bearer tokens, and secret assignments.',
+    badgeBg: 'bg-[#EAE2F2]',
+    badgeText: 'text-[#4E3471]',
+    badgeBorder: 'border-[#C6B2DE]',
+    highlightBg: 'bg-[#EAE2F2] text-[#4E3471] border-b-2 border-[#60418A]',
+  },
 };
+
+export function formatSafeEntityPreview(category: EntityCategory, rawValue: string): string {
+  if (category !== 'API_KEY') return rawValue;
+  const tail = rawValue.length >= 8 ? rawValue.slice(-4) : '••••';
+  return `[SECRET ••••${tail} · ${rawValue.length} chars]`;
+}
 
 export const CONTEXT_CLUE_META: Record<
   ContextClueCategory,

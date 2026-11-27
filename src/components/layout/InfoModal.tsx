@@ -56,19 +56,20 @@ export const InfoModal: React.FC<InfoModalProps> = ({ open, onClose }) => {
           <div className="rounded-xl border border-[#E8E2D8] bg-[#F5F0E6]/50 p-3.5">
             <p className="font-semibold text-[#26352D]">1. Zero External Transmission</p>
             <p className="mt-1">
-              All text scanning, CSV cell parsing, pseudonymization, and exposure simulation run
-              strictly in your browser&apos;s temporary memory. No document data is ever sent to a
-              server, external AI API, or browser storage (`localStorage`/`sessionStorage`).
+              All text scanning, PDF/DOCX/CSV/JSON extraction, pseudonymization, and exposure
+              simulation run strictly inside your browser&apos;s temporary memory. No document data
+              is ever sent to a server, external AI API, or persisted in browser storage.
             </p>
           </div>
 
           <div className="rounded-xl border border-[#E8E2D8] bg-[#F5F0E6]/50 p-3.5">
-            <p className="font-semibold text-[#26352D]">2. Honest Validation Boundaries</p>
+            <p className="font-semibold text-[#26352D]">2. Honest Detection & Format Scope</p>
             <ul className="mt-1 space-y-1">
-              <li>• <strong>PAN & Aadhaar-like IDs:</strong> Format/boundary checks only — never establishes government-issued or UIDAI validity.</li>
+              <li>• <strong>PAN & Aadhaar-like IDs:</strong> Format and boundary checks only — never establishes government-issued or UIDAI validity.</li>
               <li>• <strong>Payment Cards:</strong> Luhn checksum verifies digit math, not whether a card is active or genuine.</li>
-              <li>• <strong>IPv4:</strong> Octets are strictly validated between 0 and 255.</li>
-              <li>• <strong>API Keys:</strong> Not auto-detected by pattern; use Custom Sensitive Phrases for secrets.</li>
+              <li>• <strong>API Keys & Secrets:</strong> Detects known token prefixes (`sk-`, `AKIA`, `ghp_`, `AIza`), Bearer tokens, and high-confidence secret assignments. Arbitrary passwords or custom proprietary tokens may not be detected.</li>
+              <li>• <strong>Names & Locations:</strong> Uses contextual label/action name patterns and a curated city/region list rather than full AI NER or street-address parsing.</li>
+              <li>• <strong>PDF & DOCX Files:</strong> Text is extracted locally via PDF.js and Mammoth.js and exported as sanitized `.txt` or `.csv` (original layout formatting is not preserved).</li>
             </ul>
           </div>
 
@@ -77,8 +78,8 @@ export const InfoModal: React.FC<InfoModalProps> = ({ open, onClose }) => {
             <p className="mt-1">
               Independently scans the already-sanitized output for remaining direct identifiers,
               indirect clues (locations, dates, ticket/account IDs, organizations, names), and
-              linkable combinations. Exposure levels are transparent rule-based indicators, not a
-              guarantee of anonymity.
+              linkable combinations. Exposure levels are rule-based indicators, not a guarantee of
+              anonymity.
             </p>
           </div>
         </div>

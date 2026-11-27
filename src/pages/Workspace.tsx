@@ -9,9 +9,11 @@ import {
   FileText,
   Loader2,
   Plus,
-  Sparkles,
+  Stethoscope,
+  Ticket,
   Trash2,
   Upload,
+  UserCheck,
   X,
 } from 'lucide-react';
 import { useApp } from '../app/AppContext';
@@ -27,7 +29,6 @@ import {
   copyTextToClipboard,
   downloadSanitizedFile,
 } from '../engines/export/exportFile';
-import { ConfirmDialog } from '../components/layout/ConfirmDialog';
 import { PrivacyRiskMeter } from '../components/simulator/PrivacyRiskMeter';
 import { ExpandableComparison } from '../components/comparison/ExpandableComparison';
 
@@ -38,6 +39,7 @@ const DIRECT_CATEGORY_ITEMS: { key: EntityCategory; label: string }[] = [
   { key: 'PAN', label: 'PAN' },
   { key: 'AADHAAR', label: 'Aadhaar-like' },
   { key: 'CARD', label: 'Cards' },
+  { key: 'API_KEY', label: 'API Keys & Secrets' },
 ];
 
 const CONTEXT_CATEGORY_ITEMS: { key: ContextClueCategory; label: string }[] = [
@@ -45,6 +47,12 @@ const CONTEXT_CATEGORY_ITEMS: { key: ContextClueCategory; label: string }[] = [
   { key: 'LOCATION', label: 'Locations' },
   { key: 'CUSTOM_PHRASE', label: 'Custom Phrases' },
 ];
+
+const SAMPLE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  'hr-resume': UserCheck,
+  'medical-note': Stethoscope,
+  'support-ticket': Ticket,
+};
 
 export const Workspace: React.FC = () => {
   const {
@@ -60,6 +68,7 @@ export const Workspace: React.FC = () => {
     customPhrases,
     addCustomPhrase,
     removeCustomPhrase,
+    additionalRedactions,
     hasAnalyzed,
     isProcessing,
     isCsvMode,
@@ -80,7 +89,6 @@ export const Workspace: React.FC = () => {
   const [phraseInput, setPhraseInput] = useState('');
   const [copied, setCopied] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
-  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [csvPreviewTable, setCsvPreviewTable] = useState(false);
 
   const detectedCounts = useMemo(() => {
@@ -91,6 +99,7 @@ export const Workspace: React.FC = () => {
       PAN: 0,
       AADHAAR: 0,
       CARD: 0,
+      API_KEY: 0,
     };
     for (const ent of detectedEntities) {
       direct[ent.category] += 1;
@@ -108,6 +117,75 @@ export const Workspace: React.FC = () => {
     }
     return { direct, context };
   }, [detectedEntities, contextClues]);
+
+  // Real redaction summary counts calculated from actual detection + active toggles
+  const redactionSummary = useMemo(() => {
+    const directEnabledSet = new Set(enabledDirectCategories);
+    const contextEnabledSet = new Set(enabledContextCategories);
+    const extraSet = new Set(additionalRedactions.map((v) => v.toLowerCase()));
+
+    const counts: Record<string, number> = {
+      EMAIL: 0,
+      PHONE: 0,
+      IPV4: 0,
+      PAN: 0,
+      AADHAAR: 0,
+      CARD: 0,
+      API_KEY: 0,
+      PERSON_NAME: 0,
+      LOCATION: 0,
+      OTHER_CLUE: 0,
+    };
+
+    for (const ent of detectedEntities) {
+      if (directEnabledSet.has(ent.category)) {
+        counts[ent.category] += 1;
+      }
+    }
+
+    for (const clue of contextClues) {
+      const overlapsDirect = detectedEntities.some(
+        (e) =>
+          directEnabledSet.has(e.category) &&
+          clue.start < e.end &&
+          e.start < clue.end &&
+          (clue.rowIndex === undefined || clue.rowIndex === e.rowIndex)
+      );
+      if (overlapsDirect) continue;
+
+      const isRedacted =
+        contextEnabledSet.has(clue.category) ||
+        extraSet.has(clue.normalizedValue) ||
+        extraSet.has(clue.value.toLowerCase());
+
+      if (!isRedacted) continue;
+
+      if (clue.category === 'PERSON_NAME') counts.PERSON_NAME += 1;
+      else if (clue.category === 'LOCATION') counts.LOCATION += 1;
+      else counts.OTHER_CLUE += 1;
+    }
+
+    return [
+      { key: 'EMAIL', label: 'Emails', count: counts.EMAIL, tone: 'bg-[#DCE9DD] text-[#204B36]' },
+      { key: 'PHONE', label: 'Phones', count: counts.PHONE, tone: 'bg-[#E5EEF4] text-[#1F4966]' },
+      { key: 'IPV4', label: 'IPv4', count: counts.IPV4, tone: 'bg-[#EAE2F2] text-[#4E3471]' },
+      { key: 'PAN', label: 'PAN', count: counts.PAN, tone: 'bg-[#F5DFBA] text-[#664212]' },
+      { key: 'AADHAAR', label: 'Aadhaar-like', count: counts.AADHAAR, tone: 'bg-[#F4DAD6] text-[#732820]' },
+      { key: 'CARD', label: 'Cards', count: counts.CARD, tone: 'bg-[#F1E4EA] text-[#682948]' },
+      { key: 'API_KEY', label: 'API Keys', count: counts.API_KEY, tone: 'bg-[#EAE2F2] text-[#4E3471]' },
+      { key: 'PERSON_NAME', label: 'Names', count: counts.PERSON_NAME, tone: 'bg-[#DCE9DD] text-[#204B36]' },
+      { key: 'LOCATION', label: 'Locations', count: counts.LOCATION, tone: 'bg-[#E5EEF4] text-[#1F4966]' },
+      ...(counts.OTHER_CLUE > 0
+        ? [{ key: 'OTHER_CLUE', label: 'Extra Clues', count: counts.OTHER_CLUE, tone: 'bg-[#EAE2F2] text-[#4E3471]' }]
+        : []),
+    ];
+  }, [
+    detectedEntities,
+    contextClues,
+    enabledDirectCategories,
+    enabledContextCategories,
+    additionalRedactions,
+  ]);
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -129,6 +207,13 @@ export const Workspace: React.FC = () => {
     if (!phraseInput.trim()) return;
     addCustomPhrase(phraseInput);
     setPhraseInput('');
+  };
+
+  const handleClearWorkspace = () => {
+    setComparisonOpen(false);
+    setCsvPreviewTable(false);
+    setPhraseInput('');
+    clearAllData();
   };
 
   const handleCopySafeText = async () => {
@@ -185,6 +270,7 @@ export const Workspace: React.FC = () => {
   const removedTotal = redactionResult
     ? redactionResult.redactedDirectCount + redactionResult.redactedContextCount
     : 0;
+  const canClear = Boolean(rawText.trim() || customPhrases.length > 0);
 
   return (
     <div className="space-y-4">
@@ -192,7 +278,7 @@ export const Workspace: React.FC = () => {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* LEFT COLUMN: INPUT DOCUMENT & CONTROLS */}
         <section className="cs-card flex flex-col p-4 lg:col-span-6">
-          {/* Panel Header + Sample Chips */}
+          {/* Panel Heading with Clear button at top-right */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold uppercase tracking-wide text-[#26352D]">
@@ -204,31 +290,48 @@ export const Workspace: React.FC = () => {
                 </span>
               )}
             </div>
-            <span className="text-[11px] text-[#5B6058]">
-              {charCount.toLocaleString()} chars · {lineCount.toLocaleString()} lines
-            </span>
+
+            <div className="flex items-center gap-2.5">
+              <span className="text-[11px] text-[#5B6058]">
+                {charCount.toLocaleString()} chars · {lineCount.toLocaleString()} lines
+              </span>
+              <button
+                type="button"
+                onClick={handleClearWorkspace}
+                disabled={!canClear}
+                aria-label="Clear workspace"
+                className="cs-focus-ring inline-flex min-h-[30px] items-center gap-1 rounded-lg border border-[#E8E2D8] bg-[#FFFFFF] px-2.5 py-1 text-xs font-medium text-[#732820] transition-colors hover:border-[#DFB3AC] hover:bg-[#F4DAD6]/45 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Clear</span>
+              </button>
+            </div>
           </div>
 
-          {/* Sample Chips Directly Above Input Editor */}
+          {/* Highly Discoverable Sample Chips Directly Above Editor */}
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#5B6058]">
-              <Sparkles className="h-3 w-3 text-[#60418A]" aria-hidden="true" />
-              Samples:
-            </span>
-            {SYNTHETIC_SAMPLES.map((sample) => {
+            <span className="text-[11px] font-semibold text-[#5B6058]">Try sample:</span>
+            {SYNTHETIC_SAMPLES.map((sample, idx) => {
               const isActiveSample = documentSource.sampleId === sample.id;
+              const Icon = SAMPLE_ICONS[sample.id] ?? FileText;
+              const defaultTint =
+                idx === 1
+                  ? 'border-[#C6B2DE] bg-[#EAE2F2]/60 text-[#4E3471] hover:bg-[#EAE2F2]'
+                  : 'border-[#B6D4BA] bg-[#DCE9DD]/55 text-[#204B36] hover:bg-[#DCE9DD]';
+
               return (
                 <button
                   key={sample.id}
                   type="button"
                   onClick={() => loadSample(sample.id)}
-                  className={`cs-focus-ring rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`cs-focus-ring inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
                     isActiveSample
-                      ? 'border-[#60418A] bg-[#EAE2F2] text-[#4E3471]'
-                      : 'border-[#E8E2D8] bg-[#F5F0E6]/70 text-[#26352D] hover:border-[#60418A]/50 hover:bg-[#EAE2F2]/50'
+                      ? 'border-[#285C43] bg-[#285C43] text-[#FFFFFF]'
+                      : defaultTint
                   }`}
                 >
-                  {sample.title}
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>{sample.title}</span>
                 </button>
               );
             })}
@@ -249,11 +352,11 @@ export const Workspace: React.FC = () => {
             className="cs-focus-ring mt-2.5 h-48 w-full resize-y rounded-xl border border-[#E8E2D8] bg-[#F5F0E6]/35 p-3 font-mono text-xs leading-relaxed text-[#26352D] placeholder:text-[#777B72] lg:h-[205px]"
           />
 
-          {/* Single Clean Drag-and-Drop Upload Strip */}
+          {/* Multi-Format Drag-and-Drop Upload Area */}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,.csv,text/plain,text/csv"
+            accept=".txt,.csv,.pdf,.docx,.json,text/plain,text/csv,application/pdf,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
             onChange={handleFileInput}
           />
@@ -276,16 +379,16 @@ export const Workspace: React.FC = () => {
             className={`cs-focus-ring mt-2 flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-dashed px-3 py-2 text-xs transition-colors ${
               isDragging
                 ? 'border-[#285C43] bg-[#DCE9DD]/60 text-[#204B36]'
-                : 'border-[#E8E2D8] bg-[#F5F0E6]/40 text-[#5B6058] hover:border-[#285C43]/60 hover:bg-[#DCE9DD]/25'
+                : 'border-[#D8D1C4] bg-[#F5F0E6]/45 text-[#5B6058] hover:border-[#285C43]/70 hover:bg-[#DCE9DD]/30'
             }`}
           >
             <span className="flex items-center gap-2">
               <Upload className="h-3.5 w-3.5 shrink-0 text-[#285C43]" aria-hidden="true" />
               <span>
-                Drop a <strong>.txt</strong> or <strong>.csv</strong> file here, or click to upload
+                Drop a document here or browse — <strong>TXT, CSV, PDF, DOCX, JSON</strong>
               </span>
             </span>
-            <span className="shrink-0 rounded-md bg-[#FFFFFF] px-2 py-0.5 text-[11px] font-medium text-[#285C43] shadow-2xs">
+            <span className="shrink-0 rounded-md border border-[#E8E2D8] bg-[#FFFFFF] px-2 py-0.5 text-[11px] font-semibold text-[#285C43]">
               Browse
             </span>
           </div>
@@ -426,29 +529,24 @@ export const Workspace: React.FC = () => {
               })}
             </div>
 
-            {/* Inline Custom Sensitive Phrase Input + Honest API Key Scope Note */}
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <form onSubmit={handleAddPhrase} className="flex flex-1 items-center gap-1.5">
-                <input
-                  type="text"
-                  value={phraseInput}
-                  onChange={(e) => setPhraseInput(e.target.value)}
-                  placeholder="Add custom phrase or secret to redact..."
-                  aria-label="Custom sensitive phrase"
-                  className="cs-focus-ring min-h-[32px] flex-1 rounded-lg border border-[#E8E2D8] bg-[#FFFFFF] px-2.5 text-xs text-[#26352D]"
-                />
-                <button
-                  type="submit"
-                  className="cs-focus-ring inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-[#E8E2D8] bg-[#F5F0E6] px-2.5 text-xs font-semibold text-[#26352D] hover:bg-[#DCE9DD]"
-                >
-                  <Plus className="h-3 w-3" aria-hidden="true" />
-                  <span>Add</span>
-                </button>
-              </form>
-              <span className="text-[11px] text-[#5B6058]">
-                API keys: not auto-detected — add as custom phrase
-              </span>
-            </div>
+            {/* Inline Custom Sensitive Phrase Input */}
+            <form onSubmit={handleAddPhrase} className="mt-2 flex items-center gap-1.5">
+              <input
+                type="text"
+                value={phraseInput}
+                onChange={(e) => setPhraseInput(e.target.value)}
+                placeholder="Add custom phrase or proprietary token to redact..."
+                aria-label="Custom sensitive phrase"
+                className="cs-focus-ring min-h-[32px] flex-1 rounded-lg border border-[#E8E2D8] bg-[#FFFFFF] px-2.5 text-xs text-[#26352D]"
+              />
+              <button
+                type="submit"
+                className="cs-focus-ring inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-[#E8E2D8] bg-[#F5F0E6] px-2.5 text-xs font-semibold text-[#26352D] hover:bg-[#DCE9DD]"
+              >
+                <Plus className="h-3 w-3" aria-hidden="true" />
+                <span>Add</span>
+              </button>
+            </form>
 
             {customPhrases.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -473,7 +571,7 @@ export const Workspace: React.FC = () => {
           </div>
         </section>
 
-        {/* RIGHT COLUMN: HERO PRIVACY RISK METER & SANITIZED OUTPUT */}
+        {/* RIGHT COLUMN: HERO PRIVACY RISK METER, SANITIZED OUTPUT & SUMMARY */}
         <section className="cs-card flex flex-col p-4 lg:col-span-6">
           {/* Output Header */}
           <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
@@ -510,17 +608,17 @@ export const Workspace: React.FC = () => {
           {/* HERO FEATURE: PROMINENT PRIVACY RISK METER */}
           <PrivacyRiskMeter />
 
-          {/* Readable Sanitized Output Area */}
-          <div className="mt-3 flex-1">
+          {/* Flex-Expanding Readable Sanitized Output Area */}
+          <div className="mt-3 flex min-h-[240px] flex-1 flex-col">
             {!hasOutput ? (
-              <div className="flex h-60 items-center justify-center rounded-xl border border-[#E8E2D8] bg-[#F5F0E6]/35 p-6 text-center text-xs text-[#5B6058] lg:h-[268px]">
+              <div className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E2D8] bg-[#F5F0E6]/35 p-6 text-center text-xs text-[#5B6058]">
                 <p className="max-w-xs leading-relaxed">
-                  Sanitized output appears here automatically as you type, paste text, or pick one
-                  of the synthetic samples.
+                  Sanitized output appears here automatically as you paste text, upload a document
+                  (TXT, CSV, PDF, DOCX, JSON), or select a sample.
                 </p>
               </div>
             ) : isCsvMode && csvPreviewTable && redactionResult?.sanitizedCsv ? (
-              <div className="h-60 overflow-auto rounded-xl border border-[#B6D4BA] bg-[#FFFFFF] lg:h-[268px]">
+              <div className="max-h-[340px] flex-1 overflow-auto rounded-xl border border-[#B6D4BA] bg-[#FFFFFF]">
                 <table className="w-full border-collapse text-left text-xs">
                   <thead>
                     <tr className="bg-[#F5F0E6]">
@@ -553,14 +651,43 @@ export const Workspace: React.FC = () => {
             ) : (
               <pre
                 aria-label="Sanitized output text"
-                className="h-60 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-[#B6D4BA] bg-[#FFFFFF] p-3.5 font-mono text-xs leading-relaxed text-[#26352D] select-text lg:h-[268px]"
+                className="max-h-[340px] flex-1 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-[#B6D4BA] bg-[#FFFFFF] p-3.5 font-mono text-xs leading-relaxed text-[#26352D] select-text"
               >
                 {redactionResult?.sanitizedText}
               </pre>
             )}
           </div>
 
-          {/* Action Bar Anchored to Output */}
+          {/* Compact REDACTION SUMMARY Strip */}
+          <div
+            aria-label="Redaction Summary"
+            className="mt-2.5 rounded-xl border border-[#E8E2D8] bg-[#F5F0E6]/55 px-3 py-2"
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[10px] font-bold uppercase tracking-wider text-[#5B6058]">
+                Redaction Summary
+              </span>
+              {!hasOutput ? (
+                <span className="text-[11px] text-[#5B6058]">0 items redacted</span>
+              ) : (
+                redactionSummary.map((item) => (
+                  <span
+                    key={item.key}
+                    className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                      item.count > 0
+                        ? item.tone
+                        : 'bg-[#FFFFFF]/70 text-[#777B72]'
+                    }`}
+                  >
+                    <span className="font-bold">{item.count}</span>
+                    <span>{item.label}</span>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Output Toolbar (Strictly Output Actions) */}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#E8E2D8] pt-3">
             <button
               type="button"
@@ -615,16 +742,6 @@ export const Workspace: React.FC = () => {
                 <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>{comparisonOpen ? 'Hide Comparison' : 'Expand Comparison'}</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setConfirmClearOpen(true)}
-                disabled={!rawText.trim() && customPhrases.length === 0}
-                className="cs-focus-ring inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-[#E8E2D8] bg-[#FFFFFF] px-2.5 py-1.5 text-xs font-medium text-[#732820] hover:bg-[#F4DAD6]/45 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Clear</span>
-              </button>
             </div>
           </div>
         </section>
@@ -634,19 +751,6 @@ export const Workspace: React.FC = () => {
       <ExpandableComparison
         open={comparisonOpen && hasOutput}
         onClose={() => setComparisonOpen(false)}
-      />
-
-      <ConfirmDialog
-        open={confirmClearOpen}
-        title="Clear workspace data?"
-        message="This removes the input document, sanitized output, exposure findings, and in-memory pseudonym mappings."
-        confirmLabel="Clear Workspace"
-        onConfirm={() => {
-          setConfirmClearOpen(false);
-          setComparisonOpen(false);
-          clearAllData();
-        }}
-        onCancel={() => setConfirmClearOpen(false)}
       />
     </div>
   );

@@ -26,6 +26,7 @@ import {
   isLikelyCsvInput,
   processCsvDocument,
 } from '../engines/export/csvProcessor';
+import { extractDocumentFromFile } from '../engines/export/documentExtractor';
 
 export const DEFAULT_ENABLED_DIRECT: EntityCategory[] = [
   'EMAIL',
@@ -34,9 +35,14 @@ export const DEFAULT_ENABLED_DIRECT: EntityCategory[] = [
   'PAN',
   'AADHAAR',
   'CARD',
+  'API_KEY',
 ];
 
-export const DEFAULT_ENABLED_CONTEXT: ContextClueCategory[] = ['CUSTOM_PHRASE'];
+export const DEFAULT_ENABLED_CONTEXT: ContextClueCategory[] = [
+  'PERSON_NAME',
+  'LOCATION',
+  'CUSTOM_PHRASE',
+];
 
 interface StatusBanner {
   kind: 'info' | 'success' | 'warning' | 'error';
@@ -479,50 +485,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadUploadedFile = useCallback(
     async (file: File) => {
-      const lower = file.name.toLowerCase();
-      const isTxt = lower.endsWith('.txt') || file.type === 'text/plain';
-      const isCsv = lower.endsWith('.csv') || file.type === 'text/csv';
-
-      if (!isTxt && !isCsv) {
-        setStatusBanner({
-          kind: 'error',
-          message: 'Unsupported file format. Upload a .txt or .csv document.',
-        });
-        return;
-      }
-
-      const maxBytes = 2 * 1024 * 1024;
-      if (file.size > maxBytes) {
-        setStatusBanner({
-          kind: 'error',
-          message: 'File exceeds the 2 MB browser safety limit. Please split smaller batches.',
-        });
-        return;
-      }
-
       try {
-        const content = await file.text();
-        if (!content.trim()) {
-          setStatusBanner({
-            kind: 'warning',
-            message: 'The selected file is empty. Choose a file with text content.',
-          });
-          return;
-        }
+        setIsProcessing(true);
+        const extracted = await extractDocumentFromFile(file);
         setAdditionalRedactions([]);
         setSimulationHistory([]);
-        setDocumentSource({ kind: isCsv ? 'csv' : 'txt', fileName: file.name });
-        setRawTextState(content);
-        setStatusBanner({
-          kind: 'success',
-          message: `Loaded ${file.name} locally in browser memory.`,
-        });
-        logAction(`${isCsv ? 'CSV' : 'TXT'} document loaded`, `Size: ${file.size} bytes`);
-      } catch {
-        setStatusBanner({
-          kind: 'error',
-          message: 'Could not read the selected file locally in the browser.',
-        });
+        setDocumentSource(extracted.source);
+        setRawTextState(extracted.text);
+        if (extracted.notice) {
+          setStatusBanner({ kind: 'info', message: extracted.notice });
+        } else {
+          setStatusBanner({
+            kind: 'success',
+            message: `Loaded ${file.name} locally in browser memory.`,
+          });
+        }
+        logAction(
+          `${extracted.source.kind.toUpperCase()} document loaded`,
+          `Extracted ${extracted.text.length} chars from ${file.size} bytes locally`
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : 'Could not read the selected file locally in the browser.';
+        setStatusBanner({ kind: 'error', message });
+        logAction('File upload rejected', 'Invalid, encrypted, empty, or unsupported local file');
+      } finally {
+        setIsProcessing(false);
       }
     },
     [logAction]

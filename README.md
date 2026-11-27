@@ -9,9 +9,9 @@ CLEARSHARE is a **client-side Privacy Intelligence & Exposure Simulation Platfor
 ## Key Features
 
 1. **Compact Live Two-Column Workspace**
-   - Paste text directly, drag-and-drop/upload `.txt` or `.csv` files, or load three built-in synthetic chips (**HR Resume**, **Medical Note**, **Customer Support Ticket**).
-   - Instant debounced analysis updates the sanitized output and Privacy Exposure Meter automatically as you edit or toggle settings.
-   - Choose between three sanitization modes (**Full Mask**, **Partial Mask**, **Consistent Pseudonymization**) and toggle granular protection categories (**Emails**, **Phone Numbers**, **IP Addresses**, **PAN**, **Aadhaar-like**, **Cards**, **Names**, **Locations**, **Custom Phrases**).
+   - Paste text directly, drag-and-drop/upload **TXT, CSV, PDF, DOCX, or JSON** documents (all parsed locally in browser memory via PDF.js, Mammoth.js, PapaParse, and native JSON), or load three discoverable synthetic chips (**HR Resume**, **Medical Note**, **Customer Support Ticket**).
+   - Instant debounced analysis updates the sanitized output, **Redaction Summary** strip, and **Privacy Risk Meter** automatically as you edit or toggle settings.
+   - Choose between three sanitization modes (**Full Mask**, **Partial Mask**, **Consistent Pseudonymization**) and toggle granular protection categories (**Emails**, **Phone Numbers**, **IP Addresses**, **PAN**, **Aadhaar-like**, **Cards**, **API Keys & Secrets**, **Names**, **Locations**, **Custom Phrases**).
 
 2. **Hero Privacy Exposure Simulator**
    - Prominently positioned above the sanitized output panel.

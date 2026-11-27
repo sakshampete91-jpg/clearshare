@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectEntities } from '../src/engines/detection/detectEntities';
+import { detectContextClues } from '../src/engines/context/detectContextClues';
 import { isValidIPv4, isValidLuhn } from '../src/engines/detection/validators';
 
 describe('Detection Engine', () => {
@@ -88,5 +89,57 @@ describe('Detection Engine', () => {
     for (const entity of entities) {
       expect(sample.slice(entity.start, entity.end)).toBe(entity.rawValue);
     }
+  });
+
+  it('detects OpenAI, AWS, GitHub, Google, Bearer, and assignment secrets while ignoring short/placeholder strings', () => {
+    const sample = [
+      'OpenAI: sk-proj-abc1234567890xyz9876543210',
+      'AWS: AKIAIOSFODNN7EXAMPLE',
+      'GitHub: ghp_1234567890abcdef1234567890abcdef1234',
+      'Google: AIzaSyDaGmWKa4JsXZ-HjGw7ISLn_3namBGt123',
+      'Header: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload123',
+      'Config: api_key="live_9876543210abcdef_secret" secret=topSecretToken_99887766 access_token=tok_AB12CD34EF56GH78',
+      'Ignore false positives: sk-short, AKIA123, api_key=your_api_key_here, secret=password',
+    ].join('\n');
+
+    const { entities } = detectEntities(sample);
+    const secrets = entities.filter((e) => e.category === 'API_KEY');
+    const phones = entities.filter((e) => e.category === 'PHONE');
+
+    expect(secrets).toHaveLength(8);
+    expect(phones).toHaveLength(0);
+  });
+
+  it('detects contextual names and curated locations without false positives on generic headings', () => {
+    const hrText = 'Candidate: Meera Nair\nLocation: Kochi, Kerala\nTitle: Software Bug Report';
+    const supportText = 'Customer: Rahul Sharma\nRahul Sharma from Pune reported an issue.';
+    const jsonText = '{\n  "customer": "Meera Nair",\n  "location": "Kochi"\n}';
+
+    const hrClues = detectContextClues(hrText);
+    const supportClues = detectContextClues(supportText);
+    const jsonClues = detectContextClues(jsonText);
+
+    expect(hrClues.filter((c) => c.category === 'PERSON_NAME').map((c) => c.value)).toEqual([
+      'Meera Nair',
+    ]);
+    expect(hrClues.filter((c) => c.category === 'LOCATION').map((c) => c.value)).toEqual([
+      'Kochi',
+      'Kerala',
+    ]);
+    expect(hrClues.some((c) => c.value === 'Software Bug')).toBe(false);
+
+    expect(
+      supportClues.filter((c) => c.category === 'PERSON_NAME').map((c) => c.value)
+    ).toEqual(['Rahul Sharma', 'Rahul Sharma']);
+    expect(supportClues.filter((c) => c.category === 'LOCATION').map((c) => c.value)).toEqual([
+      'Pune',
+    ]);
+
+    expect(jsonClues.filter((c) => c.category === 'PERSON_NAME').map((c) => c.value)).toEqual([
+      'Meera Nair',
+    ]);
+    expect(jsonClues.filter((c) => c.category === 'LOCATION').map((c) => c.value)).toEqual([
+      'Kochi',
+    ]);
   });
 });

@@ -1,15 +1,22 @@
 import type { DetectedEntity, EntityCategory } from '../../types/clearshare';
 import {
   AADHAAR_CANDIDATE_REGEX,
+  AWS_ACCESS_KEY_REGEX,
+  BEARER_TOKEN_REGEX,
   CARD_CANDIDATE_REGEX,
   EMAIL_REGEX,
+  GITHUB_TOKEN_REGEX,
+  GOOGLE_API_KEY_REGEX,
   INDIAN_PHONE_REGEX,
   IPV4_CANDIDATE_REGEX,
+  OPENAI_KEY_REGEX,
   PAN_REGEX,
+  SECRET_ASSIGNMENT_REGEX,
 } from './patterns';
 import {
   extractIndianPhoneDigits,
   inspectPanStructure,
+  isLikelySecretAssignmentValue,
   isRepeatedDigitSequence,
   isValidEmailShape,
   isValidIPv4,
@@ -32,6 +39,7 @@ export interface DetectionOutput {
 }
 
 const CATEGORY_PRIORITY: Record<EntityCategory, number> = {
+  API_KEY: 7,
   EMAIL: 6,
   CARD: 5,
   PAN: 4,
@@ -325,6 +333,98 @@ export function detectEntities(
     }
   }
 
+  // 7. API Keys & Secrets (known prefixes, bearer tokens, secret assignments)
+  const addSecretCandidate = (
+    raw: string,
+    start: number,
+    end: number,
+    note: string
+  ) => {
+    candidates.push({
+      id: nextId('ent'),
+      category: 'API_KEY',
+      rawValue: raw,
+      normalizedValue: `secret:${raw}`,
+      start,
+      end,
+      status: 'format_only',
+      statusNote: note,
+      ...cellMeta,
+    });
+  };
+
+  for (const match of text.matchAll(OPENAI_KEY_REGEX)) {
+    const raw = match[0];
+    const start = match.index ?? 0;
+    addSecretCandidate(
+      raw,
+      start,
+      start + raw.length,
+      'Matches OpenAI-style sk- secret token format (pattern match only).'
+    );
+  }
+
+  for (const match of text.matchAll(AWS_ACCESS_KEY_REGEX)) {
+    const raw = match[0];
+    const start = match.index ?? 0;
+    addSecretCandidate(
+      raw,
+      start,
+      start + raw.length,
+      'Matches AWS Access Key ID prefix (AKIA/ASIA + 16 characters).'
+    );
+  }
+
+  for (const match of text.matchAll(GITHUB_TOKEN_REGEX)) {
+    const raw = match[0];
+    const start = match.index ?? 0;
+    addSecretCandidate(
+      raw,
+      start,
+      start + raw.length,
+      'Matches GitHub Personal Access Token format.'
+    );
+  }
+
+  for (const match of text.matchAll(GOOGLE_API_KEY_REGEX)) {
+    const raw = match[0];
+    const start = match.index ?? 0;
+    addSecretCandidate(
+      raw,
+      start,
+      start + raw.length,
+      'Matches Google API Key prefix (AIza + 35 characters).'
+    );
+  }
+
+  for (const match of text.matchAll(BEARER_TOKEN_REGEX)) {
+    const token = match[1];
+    if (!token || !isLikelySecretAssignmentValue(token)) continue;
+    const matchStart = match.index ?? 0;
+    const relOffset = match[0].indexOf(token);
+    const start = matchStart + relOffset;
+    addSecretCandidate(
+      token,
+      start,
+      start + token.length,
+      'Matches Bearer authorization token structure.'
+    );
+  }
+
+  for (const match of text.matchAll(SECRET_ASSIGNMENT_REGEX)) {
+    const value = match[1];
+    if (!value || !isLikelySecretAssignmentValue(value)) continue;
+    const matchStart = match.index ?? 0;
+    const relOffset = match[0].lastIndexOf(value);
+    const start = matchStart + relOffset;
+    addSecretCandidate(
+      value,
+      start,
+      start + value.length,
+      'High-confidence credential assignment (api_key/secret/access_token).'
+    );
+  }
+
   const entities = resolveOverlaps(candidates);
 
   const totalCountsByCategory: Record<EntityCategory, number> = {
@@ -334,6 +434,7 @@ export function detectEntities(
     PAN: 0,
     AADHAAR: 0,
     CARD: 0,
+    API_KEY: 0,
   };
   const uniqueSets: Record<EntityCategory, Set<string>> = {
     EMAIL: new Set(),
@@ -342,6 +443,7 @@ export function detectEntities(
     PAN: new Set(),
     AADHAAR: new Set(),
     CARD: new Set(),
+    API_KEY: new Set(),
   };
 
   for (const entity of entities) {
@@ -356,6 +458,7 @@ export function detectEntities(
     PAN: uniqueSets.PAN.size,
     AADHAAR: uniqueSets.AADHAAR.size,
     CARD: uniqueSets.CARD.size,
+    API_KEY: uniqueSets.API_KEY.size,
   };
 
   // Filter out warnings whose spans were superseded by a valid higher-priority entity
