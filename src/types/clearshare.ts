@@ -1,3 +1,10 @@
+export type ScreenId =
+  | 'workspace'
+  | 'analysis'
+  | 'simulator'
+  | 'comparison'
+  | 'export';
+
 export type EntityCategory =
   | 'EMAIL'
   | 'PHONE'
@@ -11,6 +18,25 @@ export type SanitizationMode =
   | 'full_mask'
   | 'partial_mask'
   | 'pseudonymize';
+
+export type MaskingChar = '*' | 'X' | '#' | '•';
+
+export interface SanitizationOptions {
+  mode: SanitizationMode;
+  maskChar: MaskingChar;
+  fullMaskStyle: 'token' | 'char_block';
+  partialTrailingDigits: 2 | 4;
+  partialKeepEmailDomain: boolean;
+  partialKeepDateYear: boolean;
+  consistentPseudonyms: boolean;
+}
+
+export interface CustomPatternRule {
+  id: string;
+  label: string;
+  pattern: string;
+  kind: 'literal' | 'regex';
+}
 
 export type ValidationStatus =
   | 'valid'
@@ -94,6 +120,29 @@ export interface ExposureSimulationResult {
   remainingCount: number;
 }
 
+export type VerificationStatus =
+  | 'Not yet analysed'
+  | 'Processing'
+  | 'Verification required'
+  | 'Exposure detected'
+  | 'Residual exposure detected'
+  | 'No supported patterns detected'
+  | 'Verification failed';
+
+export interface VerificationReport {
+  status: VerificationStatus;
+  passed: boolean;
+  verifiedAt: string;
+  originalDirectCount: number;
+  originalClueCount: number;
+  remainingDirectCount: number;
+  remainingClueCount: number;
+  residualPatterns: string[];
+  structuralCheckPassed: boolean;
+  summary: string;
+  recommendations: string[];
+}
+
 export interface SimulationSnapshot {
   runNumber: number;
   level: ExposureLevel;
@@ -130,6 +179,24 @@ export interface ActivityLogEntry {
   timestamp: string;
   action: string;
   detail: string;
+}
+
+export interface LocalSessionSummary {
+  id: string;
+  timestamp: string;
+  sourceLabel: string;
+  mode: SanitizationMode;
+  detectedCount: number;
+  redactedCount: number;
+  verificationStatus: VerificationStatus;
+}
+
+export interface AppErrorInfo {
+  id: string;
+  operation: string;
+  whatHappened: string;
+  originalPreserved: boolean;
+  nextStep: string;
 }
 
 export interface SyntheticSample {

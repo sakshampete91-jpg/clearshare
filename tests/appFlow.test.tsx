@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { App } from '../src/App';
 import { SYNTHETIC_SAMPLES } from '../src/data/syntheticSamples';
@@ -79,5 +79,46 @@ describe('CLEARSHARE Redesigned Live Workspace & Pipeline', () => {
     const dialog = screen.getByRole('dialog', { name: /local activity log/i });
     expect(dialog.textContent).not.toContain('rahul.sharma@example.in');
     expect(dialog.textContent).not.toContain('sk-proj-synthetic99demoKeyForClearshareTest01');
+  });
+
+  it('navigates across all 5 primary product areas and escapes HTML/script payloads safely', async () => {
+    const { container } = render(<App />);
+
+    // Load HR Resume and test navigation across all 5 areas
+    fireEvent.click(screen.getByRole('button', { name: /hr resume/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/sanitized output text/i)).toBeInTheDocument();
+    });
+
+    const nav = screen.getByRole('navigation', { name: /primary areas/i });
+
+    fireEvent.click(within(nav).getByRole('button', { name: /document analysis/i }));
+    expect(screen.getByRole('heading', { name: /document analysis/i })).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole('button', { name: /privacy simulator/i }));
+    expect(screen.getByRole('heading', { name: /privacy exposure simulator/i })).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole('button', { name: /comparison & review/i }));
+    expect(
+      screen.getByRole('heading', { name: /comparison & residual exposure review/i })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole('button', { name: /export & reporting/i }));
+    expect(
+      screen.getByRole('heading', { name: /export & privacy analysis report/i })
+    ).toBeInTheDocument();
+
+    // Return to Workspace and inject HTML/script text -> zero <script> tags executed/rendered
+    fireEvent.click(within(nav).getByRole('button', { name: /workspace/i }));
+    const editor = screen.getByLabelText(/paste sensitive text/i);
+    fireEvent.change(editor, {
+      target: { value: '<script>alert(1)</script> email test@example.in' },
+    });
+
+    await waitFor(() => {
+      const output = screen.getByLabelText(/sanitized output text/i);
+      expect(output.textContent).toContain('<script>alert(1)</script> email [REDACTED]');
+    });
+    expect(container.querySelectorAll('script')).toHaveLength(0);
   });
 });

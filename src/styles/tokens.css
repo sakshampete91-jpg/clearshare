@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+@theme {
+  --color-cream: #F5F0E6;
+  --color-surface: #FFFFFF;
+  --color-forest: #285C43;
+  --color-forest-hover: #204B36;
+  --color-royal: #60418A;
+  --color-royal-hover: #4E3471;
+  --color-sage: #DCE9DD;
+  --color-lavender: #EAE2F2;
+  --color-warm-border: #E8E2D8;
+  --color-ink: #26352D;
+  --color-muted: #5B6058;
+  --color-subtle: #777B72;
+  --color-status-success: #BDE0C4;
+  --color-status-warning: #F5DFBA;
+  --color-status-error: #F4DAD6;
+}
+
 :root {
   --cs-cream: #F5F0E6;
   --cs-white: #FFFFFF;
@@ -11,11 +29,13 @@
   --cs-lavender: #EAE2F2;
   --cs-border: #E8E2D8;
   --cs-ink: #26352D;
-  --cs-muted: #777B72;
-  --cs-muted-readable: #5B6058;
+  --cs-muted: #5B6058;
+  --cs-subtle: #777B72;
   --cs-success: #BDE0C4;
   --cs-warning: #F5DFBA;
   --cs-error: #F4DAD6;
+  --cs-radius-card: 14px;
+  --cs-radius-control: 12px;
 }
 
 * {
@@ -47,8 +67,15 @@ body {
 .cs-card {
   background-color: var(--cs-white);
   border: 1px solid var(--cs-border);
-  border-radius: 14px;
+  border-radius: var(--cs-radius-card);
   box-shadow: 0 1px 2px rgba(38, 53, 45, 0.04);
+}
+
+.cs-card-intelligence {
+  background-color: var(--cs-white);
+  border: 1px solid #D2C2E4;
+  border-radius: var(--cs-radius-card);
+  box-shadow: 0 1px 3px rgba(96, 65, 138, 0.06);
 }
 
 .cs-focus-ring:focus-visible {

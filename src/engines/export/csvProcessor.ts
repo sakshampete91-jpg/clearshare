@@ -3,16 +3,20 @@ import type {
   ContextClue,
   ContextClueCategory,
   CsvGrid,
+  CustomPatternRule,
   DetectedEntity,
   EntityCategory,
   SanitizationMode,
+  SanitizationOptions,
 } from '../../types/clearshare';
 import { detectEntities } from '../detection/detectEntities';
 import { detectContextClues } from '../context/detectContextClues';
+import { InMemoryPseudonymRegistry } from '../redaction/sanitizeDocument';
 import {
-  InMemoryPseudonymRegistry,
-  sanitizeText,
-} from '../redaction/sanitizeDocument';
+  DEFAULT_SANITIZATION_OPTIONS,
+  detectCustomPatternClues,
+  sanitizeWithOptions,
+} from '../../services/sanitization/configuredSanitizer';
 
 export interface CsvProcessingResult {
   originalGrid: CsvGrid;
@@ -60,13 +64,19 @@ export function parseCsvToGrid(rawCsv: string, fileName = 'document.csv'): CsvGr
 
 export function processCsvDocument(
   rawCsv: string,
-  mode: SanitizationMode,
+  modeOrOptions: SanitizationMode | SanitizationOptions,
   customPhrases: string[] = [],
   additionalRedactionValues: string[] = [],
   fileName = 'document.csv',
   enabledDirectCategories?: EntityCategory[],
-  enabledContextCategories?: ContextClueCategory[]
+  enabledContextCategories?: ContextClueCategory[],
+  customRules: CustomPatternRule[] = []
 ): CsvProcessingResult {
+  const options: SanitizationOptions =
+    typeof modeOrOptions === 'string'
+      ? { ...DEFAULT_SANITIZATION_OPTIONS, mode: modeOrOptions }
+      : modeOrOptions;
+
   const originalGrid = parseCsvToGrid(rawCsv, fileName);
   const registry = new InMemoryPseudonymRegistry();
 
@@ -111,7 +121,9 @@ export function processCsvDocument(
         ? cellDetection.entities.filter((e) => directEnabledSet.has(e.category))
         : cellDetection.entities;
 
-      const cellClues = detectContextClues(cellValue, customPhrases).map((clue) => ({
+      const baseClues = detectContextClues(cellValue, customPhrases);
+      const customRuleClues = detectCustomPatternClues(cellValue, customRules);
+      const cellClues = [...baseClues, ...customRuleClues].map((clue) => ({
         ...clue,
         rowIndex: r + 1,
         colIndex: c,
@@ -126,10 +138,10 @@ export function processCsvDocument(
           additionalSet.has(clue.value.toLowerCase())
       );
 
-      const cellRedaction = sanitizeText(
+      const cellRedaction = sanitizeWithOptions(
         cellValue,
         entitiesToRedact,
-        mode,
+        options,
         cluesToRedact,
         registry
       );
