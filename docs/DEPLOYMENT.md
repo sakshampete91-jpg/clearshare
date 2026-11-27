@@ -32,25 +32,20 @@ CLEARSHARE is a **100% client-side React 19 + Vite 8 + TypeScript 7 single-page 
 
 ---
 
-## 3. One-Time Setup & Project Selection
+## 3. Connected Project & One-Time Setup
 
-Because Firebase CLI is not pre-installed globally in this workspace and no `.firebaserc` project binding is committed yet:
+- **Configured Project ID (`.firebaserc`):** `clearshare-e965e` (Hosting site: `clearshare-e965e`)
+- **Live URLs:**
+  - `https://clearshare-e965e.web.app`
+  - `https://clearshare-e965e.firebaseapp.com`
 
-1. **Install Firebase CLI** (on Windows PowerShell, use `.cmd` shims):
-   ```powershell
-   npm.cmd install -g firebase-tools
-   firebase.cmd --version
-   ```
-2. **Sign in to Firebase:**
-   ```powershell
-   firebase.cmd login
-   ```
-3. **Select or Create a Firebase Project** (Spark free tier is sufficient for static Firebase Hosting):
-   ```powershell
-   firebase.cmd projects:list
-   # Link existing project (recommended — creates .firebaserc cleanly):
-   firebase.cmd use --add
-   ```
+If setting up on a fresh machine (on Windows PowerShell, use `.cmd` shims):
+```powershell
+npm.cmd install -g firebase-tools
+firebase.cmd --version
+firebase.cmd login
+firebase.cmd use clearshare-e965e
+```
 
 ---
 
@@ -110,11 +105,14 @@ After deployment succeeds:
 Do not delete prior working releases:
 
 ```powershell
-# List deployed Hosting versions/releases (or inspect in Firebase Console -> Hosting -> Release history)
-firebase.cmd hosting:releases:list
+# Inspect active Hosting channels & finalized versions
+firebase.cmd hosting:channel:list --json
+firebase.cmd hosting:sites:get clearshare-e965e --json
 
-# Roll back via Firebase Console -> Hosting -> select prior release -> Roll back,
-# or redeploy the last known-good Git commit after building cleanly:
+# Clone a verified preview channel back to live (or roll back in Firebase Console -> Hosting -> Release history):
+firebase.cmd hosting:clone clearshare-e965e:clearshare-preview clearshare-e965e:live
+
+# Or rebuild cleanly from a known-good Git commit and redeploy:
 git checkout <verified-commit-sha>
 Set-Location frontend; npm.cmd ci; npm.cmd run build
 Set-Location ..; firebase.cmd deploy --only hosting

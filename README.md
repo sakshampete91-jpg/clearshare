@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://clearshare-e965e.web.app"><img src="https://img.shields.io/badge/Live_Demo-Firebase_Hosting-285C43?style=flat-square&logo=firebase&logoColor=white" alt="Live Demo on Firebase Hosting" /></a>
   <a href="https://github.com/sakshampete91-jpg/clearshare/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-Quality_%26_Security-285C43?style=flat-square&logo=githubactions&logoColor=white" alt="CI Status" /></a>
   <img src="https://img.shields.io/badge/React-19-285C43?style=flat-square&logo=react&logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/Vite-8-60418A?style=flat-square&logo=vite&logoColor=white" alt="Vite 8" />
@@ -242,7 +243,18 @@ npm run build
 npm run preview
 ```
 
-### 3. Optional Static Container Build (Nginx)
+### 3. Firebase Hosting Deployment (`frontend/dist` → Static Hosting)
+
+CLEARSHARE is configured for **Firebase Hosting** (`clearshare-e965e`) via [`firebase.json`](firebase.json) and [`.firebaserc`](.firebaserc):
+
+```bash
+cd frontend && npm run build
+cd .. && firebase deploy --only hosting
+```
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for security header verification, preview channel testing, rollback commands, and optional Workload Identity CI/CD setup.
+
+### 4. Optional Static Container Build (Nginx)
 
 ```bash
 docker build -t clearshare .
@@ -293,13 +305,15 @@ See [`docs/TESTING.md`](docs/TESTING.md) for suite-by-suite coverage details acr
 
 ---
 
-## Demo & Walkthrough
+## Live Demo & Walkthrough
 
-A self-contained interactive demo is built directly into the application:
+- **Live Production URL (Firebase Hosting):** **<https://clearshare-e965e.web.app>** (mirror: <https://clearshare-e965e.firebaseapp.com>)
 
-1. Start the local app (`cd frontend && npm run dev`) and visit `http://localhost:5173/`.
+Try the interactive privacy workflow directly in the browser (100% local memory, zero server upload):
+
+1. Open **<https://clearshare-e965e.web.app>** (or run locally via `cd frontend && npm run dev` at `http://localhost:5173/`).
 2. Select **`Customer Support Ticket`** in the **Workspace** panel to inspect how CLEARSHARE detects PII + API keys, masks direct identifiers, and exposes remaining contextual linkability (`TKT-48291` + `ACCT-77410`).
-3. Switch strategies inside **Privacy Simulator** (`Full Mask`, `Partial Mask`, `Consistent Pseudonymization`) and click **`Apply`** on contextual recommendations to watch **Independent Verification** transition to clean status.
+3. Switch strategies inside **Privacy Simulator** (`Full Mask`, `Partial Mask`, `Consistent Pseudonymization`) and click **`Apply`** on contextual recommendations to watch **Independent Verification** update status in real time.
 
 ---
 
