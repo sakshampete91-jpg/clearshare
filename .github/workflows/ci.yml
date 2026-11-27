@@ -50,13 +50,13 @@ jobs:
             echo "Error: tracked .env file detected"
             exit 1
           fi
-          if git grep -En '(AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{20,}|sk_live_[0-9A-Za-z]{16,}|xox[baprs]-[0-9A-Za-z-]{10,}|BEGIN [A-Z ]*PRIVATE KEY)' -- ':!frontend/package-lock.json'; then
+          if git grep -En '(AIza[0-9A-Za-z_-]{35}|(AKIA|ASIA)[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{20,}|(sk|rk)_live_[0-9A-Za-z]{16,}|xox[baprs]-[0-9A-Za-z-]{10,}|BEGIN [A-Z ]*PRIVATE KEY|(postgres|postgresql|mysql|mongodb(\+srv)?|redis):\/\/[^/\s:@]+:[^/\s@]+@)' -- ':!frontend/package-lock.json' ':!docs/screenshots/*'; then
             echo "Error: raw secret-shaped literal detected in tracked files"
             exit 1
           fi
       - name: Verify client-only browser privacy boundaries
         run: |
-          if git grep -En 'localStorage|sessionStorage|dangerouslySetInnerHTML|innerHTML|XMLHttpRequest|Math\.random' -- 'frontend/src/'; then
-            echo "Error: disallowed browser storage, unsafe DOM, or non-crypto RNG found in frontend/src/"
+          if git grep -En 'localStorage|sessionStorage|dangerouslySetInnerHTML|innerHTML|XMLHttpRequest|Math\.random|console\.(log|info|debug)' -- 'frontend/src/'; then
+            echo "Error: disallowed browser storage, unsafe DOM, debug logging, or non-crypto RNG found in frontend/src/"
             exit 1
           fi

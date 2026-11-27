@@ -6,7 +6,10 @@ import {
   sanitizeWithOptions,
 } from '../src/services/sanitization/configuredSanitizer';
 import {
+  buildSafeAppError,
   containsHtmlLikeMarkup,
+  generateSecureId,
+  sanitizeDisplayFilename,
   validateCustomRegexPattern,
 } from '../src/security/inputGuards';
 import { verifySanitizedOutput } from '../src/services/verification/verificationService';
@@ -161,5 +164,29 @@ describe('Verification, Security, & Edge Cases', () => {
     expect(out.detectedEntities).toHaveLength(2000);
     expect(out.redactionResult.redactedDirectCount).toBe(2000);
     expect(elapsedMs).toBeLessThan(3000);
+  });
+
+  it('sanitizes filenames, truncates error details safely, and masks synthetic Google API keys in diagnostics', () => {
+    expect(sanitizeDisplayFilename('C:\\Users\\alice\\secrets\\doc<1>.txt')).toBe('doc_1_.txt');
+    expect(sanitizeDisplayFilename('../../etc/passwd')).toBe('passwd');
+
+    const longErr = buildSafeAppError('Parsing', new Error('X'.repeat(300)), 'Retry');
+    expect(longErr.whatHappened.length).toBeLessThanOrEqual(180);
+    expect(generateSecureId('req')).toMatch(/^req-[0-9a-z-]+$/i);
+
+    const syntheticGoogleKey = ['AIza', 'Synthetic00DemoKey00Clearshare00001'].join('');
+    const result = runPrivacyPipeline({
+      text: `Config token: ${syntheticGoogleKey}`,
+      source: { kind: 'txt', fileName: 'C:\\temp\\config.txt' },
+      options: DEFAULT_SANITIZATION_OPTIONS,
+      enabledDirectCategories: DEFAULT_ENABLED_DIRECT,
+      enabledContextCategories: DEFAULT_ENABLED_CONTEXT,
+      customRules: [],
+      additionalRedactions: [],
+    });
+
+    expect(result.redactionResult.sanitizedText).not.toContain(syntheticGoogleKey);
+    expect(result.redactionResult.sanitizedText).toContain('[REDACTED]');
+    expect(result.verificationReport.status).toBe('No supported patterns detected');
   });
 });

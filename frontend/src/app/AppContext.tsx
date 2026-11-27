@@ -474,7 +474,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               error?: string;
             }>
           ) => {
-            if (cancelled || evt.data.requestId !== reqId) return;
+            if (evt.origin !== '' && evt.origin !== window.location.origin) return;
+            if (!evt.data || cancelled || evt.data.requestId !== reqId) return;
             setAnalysisStep('Analysing exposure');
             if (evt.data.ok && evt.data.result) {
               applyPipelineSuccess(evt.data.result, rawText, documentSource);

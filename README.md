@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Vite-8-60418A?style=flat-square&logo=vite&logoColor=white" alt="Vite 8" />
   <img src="https://img.shields.io/badge/TypeScript-7-285C43?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 7" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-v4-26352D?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS v4" />
-  <img src="https://img.shields.io/badge/Vitest-30_Passing-60418A?style=flat-square&logo=vitest&logoColor=white" alt="Vitest 30 Passing" />
+  <img src="https://img.shields.io/badge/Vitest-31_Passing-60418A?style=flat-square&logo=vitest&logoColor=white" alt="Vitest 31 Passing" />
   <img src="https://img.shields.io/badge/Processing-Browser_Memory_Only-285C43?style=flat-square" alt="Browser Memory Only" />
 </p>
 
@@ -110,7 +110,7 @@ All screenshots below were captured directly from the running CLEARSHARE web app
   - Evaluates indirect contextual clues (`ORGANIZATION`, `DATE`, `TICKET_REF`, `ACCOUNT_REF`, `UNCERTAIN`) and multi-clue **linkability combinations** after direct identifiers are masked.
   - Lets users compare **Full Mask**, **Partial Mask**, and **Consistent Pseudonymization** (`EMAIL_01`, `PHONE_01`) with customizable mask glyphs (`Auto`, `*`, `X`, `#`, `•`).
 - **Independent Verification & Fail-Closed Status**
-  - Automatically re-parses and re-scans sanitized output independently before marking a document `Verified clean` or `Residual exposure detected`.
+  - Automatically re-parses and re-scans sanitized output independently before reporting `No supported patterns detected`, `Residual exposure detected`, or `Exposure detected`.
 - **Hardened Browser & Export Controls**
   - Escaped React node rendering (zero `dangerouslySetInnerHTML`, `innerHTML`, `eval`, or `Function`).
   - CSV formula-injection neutralization (`neutralizeCsvFormulaCell` prefixes leading `=`, `+`, `-`, `@`, `\t`, `\r` with `'`).
@@ -201,7 +201,7 @@ clearshare/
 │   │   ├── types/                      # Shared TypeScript domain interfaces
 │   │   ├── utils/                      # Category metadata & safe secret formatting
 │   │   └── workers/                    # Background document processing Web Worker
-│   ├── tests/                          # 7 Vitest suites covering 30 automated checks
+│   ├── tests/                          # 7 Vitest suites covering 31 automated checks
 │   ├── .env.example                    # Non-secret Vite environment variable template
 │   ├── index.html                      # CSP meta header & app root
 │   ├── package.json
@@ -277,7 +277,7 @@ npm run lint
 # Strict TypeScript check
 npm run typecheck
 
-# Full automated test suite (7 test files, 30 tests)
+# Full automated test suite (7 test files, 31 tests)
 npm run test:run
 
 # Production bundle build

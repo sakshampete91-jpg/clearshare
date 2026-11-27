@@ -2,6 +2,13 @@ import type { PipelineInput, PipelineOutput } from '../services/pipeline/pipelin
 import { runPrivacyPipeline } from '../services/pipeline/pipelineOrchestrator';
 
 self.onmessage = (event: MessageEvent<{ requestId: string; input: PipelineInput }>) => {
+  // Dedicated workers receive empty-string origin per HTML spec; reject unexpected cross-origin senders.
+  if (event.origin !== '' && event.origin !== self.location.origin) {
+    return;
+  }
+  if (!event.data || typeof event.data.requestId !== 'string' || !event.data.input) {
+    return;
+  }
   const { requestId, input } = event.data;
   try {
     const result: PipelineOutput = runPrivacyPipeline(input);
