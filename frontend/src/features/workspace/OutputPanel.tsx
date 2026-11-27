@@ -39,6 +39,7 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
     detectedEntities,
     contextClues,
     redactionResult,
+    simulationResult,
     verificationStatus,
     verificationReport,
     logAction,
@@ -304,8 +305,15 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({
         </div>
       </div>
 
+      {/* Residual exposure warning */}
+      {hasOutput && simulationResult && simulationResult.level !== 'Low' && (
+        <div className="mt-2 text-sm text-amber-800 bg-amber-100 border border-amber-300 rounded p-2 flex items-center gap-1.5">
+          <span className="font-medium">⚠️ Residual {simulationResult.level.toLowerCase()} exposure detected – review before copying or downloading.</span>
+        </div>
+      )}
       {/* Output Toolbar */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-warm-border pt-3">
+
         <button
           type="button"
           onClick={handleCopySafeText}

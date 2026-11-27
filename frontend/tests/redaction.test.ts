@@ -19,14 +19,14 @@ describe('Sanitization Engine', () => {
 
   it('applies Mode B Partial Mask with category-appropriate rules', () => {
     const text =
-      'Email: saksham@gmail.com | Phone: 9876543210 | PAN: ABCDE1234F | Card: 1234567812345678 | IP: 192.168.1.45 | Aadhaar: 2345 6789 0123';
+      'Email: saksham@gmail.com | Phone: 9876543210 | PAN: ABCDE1234F | Card: 4532015112830366 | IP: 192.168.1.45 | Aadhaar: 2345 6789 0123';
     const { entities } = detectEntities(text);
     const result = sanitizeText(text, entities, 'partial_mask');
 
     expect(result.sanitizedText).toContain('s******@gmail.com');
     expect(result.sanitizedText).toContain('******3210');
     expect(result.sanitizedText).toContain('ABCDE****F');
-    expect(result.sanitizedText).toContain('XXXX XXXX 5678');
+    expect(result.sanitizedText).toContain('XXXX XXXX 0366');
     expect(result.sanitizedText).toContain('xxx.xxx.xxx.45');
     expect(result.sanitizedText).toContain('XXXX XXXX 0123');
   });

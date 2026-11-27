@@ -132,9 +132,11 @@ function resolveClueOverlaps(clues: ContextClue[]): ContextClue[] {
   };
 
   const sorted = [...clues].sort((a, b) => {
+    // Prioritize higher category weight (CUSTOM_PHRASE highest), then longer span.
+    const weightDiff = (categoryWeight[b.category] ?? 0) - (categoryWeight[a.category] ?? 0);
+    if (weightDiff !== 0) return weightDiff;
     const lenDiff = b.end - b.start - (a.end - a.start);
-    if (lenDiff !== 0) return lenDiff;
-    return categoryWeight[b.category] - categoryWeight[a.category];
+    return lenDiff;
   });
 
   const accepted: ContextClue[] = [];

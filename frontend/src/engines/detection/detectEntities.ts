@@ -156,20 +156,19 @@ export function detectEntities(
     if (digits.length < 13 || digits.length > 19) continue;
 
     const luhnOk = isValidLuhn(digits);
-    candidates.push({
-      id: nextId('ent'),
-      category: 'CARD',
-      rawValue: raw,
-      normalizedValue: digits,
-      start,
-      end,
-      status: luhnOk ? 'valid' : 'invalid_checksum',
-      statusNote: luhnOk
-        ? 'Passes Luhn checksum. Note: Luhn validation checks digit math only and does not prove a card is active or genuine.'
-        : 'Fails Luhn checksum (possible typo or synthetic card candidate). Kept visible as an invalid-checksum candidate.',
-      ...cellMeta,
-    });
-
+    if (luhnOk) {
+      candidates.push({
+        id: nextId('ent'),
+        category: 'CARD',
+        rawValue: raw,
+        normalizedValue: digits,
+        start,
+        end,
+        status: 'valid',
+        statusNote: 'Passes Luhn checksum. Note: Luhn validation checks digit math only and does not prove a card is active or genuine.',
+        ...cellMeta,
+      });
+    }
     if (!luhnOk) {
       warnings.push({
         id: nextId('warn'),

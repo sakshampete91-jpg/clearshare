@@ -69,17 +69,17 @@ describe('Detection Engine', () => {
     expect(cards[0].normalizedValue).toBe('4532015112830366');
   });
 
-  it('separates valid Luhn cards from invalid checksum card candidates', () => {
+  it('excludes invalid Luhn cards from entities and reports them as warnings', () => {
     expect(isValidLuhn('4532015112830366')).toBe(true);
     expect(isValidLuhn('4532015112830367')).toBe(false);
 
     const sample = 'Card A: 4532 0151 1283 0366 | Card B: 4532 0151 1283 0367';
-    const { entities } = detectEntities(sample);
+    const { entities, warnings } = detectEntities(sample);
     const cards = entities.filter((e) => e.category === 'CARD');
 
-    expect(cards).toHaveLength(2);
+    expect(cards).toHaveLength(1);
     expect(cards[0].status).toBe('valid');
-    expect(cards[1].status).toBe('invalid_checksum');
+    expect(warnings.some((w) => w.category === 'CARD')).toBe(true);
   });
 
   it('preserves exact character offsets for slicing original text', () => {
