@@ -45,8 +45,9 @@ describe('Sanitization Engine', () => {
   });
 
   it('sanitizes API keys and secrets across Full Mask, Partial Mask, and Pseudonymize modes', () => {
-    const text =
-      'Primary key: sk-proj-abc1234567890xyz9876543210 | Repeat: sk-proj-abc1234567890xyz9876543210 | AWS: AKIAIOSFODNN7EXAMPLE';
+    const syntheticKey = ['sk', 'proj', 'syntheticDemo9901Clearshare3210'].join('-');
+    const syntheticAws = ['AKIA', 'SYNTHETIC0DEMO99'].join('');
+    const text = `Primary key: ${syntheticKey} | Repeat: ${syntheticKey} | AWS: ${syntheticAws}`;
     const { entities } = detectEntities(text);
 
     const full = sanitizeText(text, entities, 'full_mask');
@@ -56,7 +57,7 @@ describe('Sanitization Engine', () => {
 
     const partial = sanitizeText(text, entities, 'partial_mask');
     expect(partial.sanitizedText).toContain('****3210');
-    expect(partial.sanitizedText).toContain('****MPLE');
+    expect(partial.sanitizedText).toContain('****MO99');
 
     const pseudo = sanitizeText(text, entities, 'pseudonymize');
     expect(pseudo.sanitizedText).toBe(

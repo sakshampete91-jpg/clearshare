@@ -93,12 +93,12 @@ describe('Detection Engine', () => {
 
   it('detects OpenAI, AWS, GitHub, Google, Stripe, Slack, Bearer, and assignment secrets while ignoring short/placeholder strings', () => {
     // Assemble synthetic test tokens dynamically so static secret scanners do not treat fixtures as live credentials
-    const openAiFake = ['sk', 'proj', 'abc1234567890xyz9876543210'].join('-');
-    const awsFake = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
-    const ghFake = ['ghp', '1234567890abcdef1234567890abcdef1234'].join('_');
-    const googleFake = ['AIza', 'SyDaGmWKa4JsXZ-HjGw7ISLn_3namBGt123'].join('');
-    const stripeFake = ['sk', 'test', '51N9xAbC1234567890xyzABC'].join('_');
-    const slackFake = ['xoxb', '123456789012', '1234567890123', 'AbCdEfGhIjKlMnOpQrStUvWx'].join('-');
+    const openAiFake = ['sk', 'proj', 'syntheticDemo9901ClearshareTest'].join('-');
+    const awsFake = ['AKIA', 'SYNTHETIC0DEMO99'].join('');
+    const ghFake = ['ghp', 'Synthetic00Demo00Token00Clearshare01'].join('_');
+    const googleFake = ['AIza', 'Synthetic00DemoKey00Clearshare00001'].join('');
+    const stripeFake = ['sk', 'test', 'Synthetic00Stripe00Test01'].join('_');
+    const slackFake = ['xoxb', '000000000000', '0000000000000', 'SyntheticDemoSlackToken'].join('-');
 
     const sample = [
       `OpenAI: ${openAiFake}`,
