@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="clearshare-title clearshare-desc">
+  <title id="clearshare-title">CLEARSHARE — Privacy Intelligence &amp; Exposure Simulation Platform</title>
+  <desc id="clearshare-desc">Editorial Cream, Forest Green, and Royal Purple banner for CLEARSHARE: Know what your data reveals before you share it.</desc>
+
+  <defs>
+    <pattern id="subtle-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#DCE9DD" stroke-width="1" stroke-opacity="0.65" />
+    </pattern>
+  </defs>
+
+  <!-- Outer Editorial Canvas -->
+  <rect width="1200" height="320" rx="20" fill="#F5F0E6" />
+  <rect width="1200" height="320" rx="20" fill="url(#subtle-grid)" />
+
+  <!-- Elevated Main Card -->
+  <rect x="28" y="24" width="1144" height="272" rx="18" fill="#FFFFFF" stroke="#DCE9DD" stroke-width="2" />
+
+  <!-- Top Accent Bar -->
+  <rect x="28" y="24" width="1144" height="8" rx="4" fill="#285C43" />
+  <rect x="860" y="24" width="312" height="8" rx="4" fill="#60418A" />
+
+  <!-- Left Shield + Document Inspection Mark -->
+  <g transform="translate(76, 72)">
+    <rect x="0" y="0" width="168" height="176" rx="20" fill="#F5F0E6" stroke="#DCE9DD" stroke-width="2" />
+    <!-- Document Sheet -->
+    <rect x="34" y="26" width="84" height="112" rx="10" fill="#FFFFFF" stroke="#285C43" stroke-width="3" />
+    <!-- Text Lines & Highlighted Span Bars -->
+    <rect x="48" y="46" width="56" height="8" rx="4" fill="#26352D" opacity="0.85" />
+    <rect x="48" y="64" width="36" height="8" rx="4" fill="#60418A" />
+    <rect x="88" y="64" width="16" height="8" rx="4" fill="#EAE2F2" />
+    <rect x="48" y="82" width="48" height="8" rx="4" fill="#DCE9DD" />
+    <rect x="48" y="100" width="54" height="8" rx="4" fill="#285C43" opacity="0.9" />
+    <rect x="48" y="118" width="34" height="8" rx="4" fill="#26352D" opacity="0.35" />
+    <!-- Verification Shield Badge -->
+    <path d="M122 86 L150 97 V121 C150 140 137 154 122 160 C107 154 94 140 94 121 V97 Z" fill="#285C43" stroke="#FFFFFF" stroke-width="3" />
+    <path d="M111 122 L119 130 L134 114" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Right Identity Copy -->
+  <g transform="translate(278, 76)">
+    <!-- Product Pill -->
+    <rect x="0" y="0" width="236" height="30" rx="15" fill="#DCE9DD" />
+    <circle cx="18" cy="15" r="5" fill="#285C43" />
+    <text x="32" y="20" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="700" letter-spacing="0.08em" fill="#285C43">CLIENT-SIDE PRIVACY STUDIO</text>
+
+    <!-- Brand Wordmark -->
+    <text x="0" y="82" font-family="'Manrope', 'Inter', 'Segoe UI', system-ui, sans-serif" font-size="52" font-weight="800" letter-spacing="-0.02em" fill="#26352D">CLEARSHARE</text>
+
+    <!-- Core Tagline -->
+    <text x="0" y="116" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="21" font-weight="600" fill="#60418A">Know what your data reveals before you share it.</text>
+
+    <!-- Pillar Chips -->
+    <g transform="translate(0, 142)">
+      <rect x="0" y="0" width="166" height="34" rx="10" fill="#F5F0E6" stroke="#DCE9DD" stroke-width="1.5" />
+      <text x="83" y="22" text-anchor="middle" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="600" fill="#26352D">Zero-Backend Memory</text>
+
+      <rect x="180" y="0" width="174" height="34" rx="10" fill="#EAE2F2" stroke="#60418A" stroke-opacity="0.25" stroke-width="1.5" />
+      <text x="267" y="22" text-anchor="middle" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="600" fill="#60418A">Exposure Simulation</text>
+
+      <rect x="368" y="0" width="194" height="34" rx="10" fill="#DCE9DD" stroke="#285C43" stroke-opacity="0.25" stroke-width="1.5" />
+      <text x="465" y="22" text-anchor="middle" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="600" fill="#285C43">Fail-Closed Verification</text>
+
+      <rect x="576" y="0" width="178" height="34" rx="10" fill="#FFFFFF" stroke="#DCE9DD" stroke-width="1.5" />
+      <text x="665" y="22" text-anchor="middle" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="600" fill="#26352D">Mask · Partial · Pseudo</text>
+    </g>
+  </g>
+</svg>

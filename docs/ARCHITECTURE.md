@@ -31,7 +31,7 @@ SAFE EXPORT (Sanitized TXT / Formula-Safe CSV / Non-PII Analysis Reports)
 ## Directory Structure
 
 ```text
-src/
+frontend/src/
 ├── app/
 │   └── AppContext.tsx                     # Session-only state, Web Worker dispatch, error recovery
 ├── components/

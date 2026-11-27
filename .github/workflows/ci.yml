@@ -13,12 +13,16 @@ jobs:
   quality-and-tests:
     name: Lint, Typecheck, Tests & Build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
@@ -34,22 +38,25 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+          cache-dependency-path: frontend/package-lock.json
       - name: Check dependency vulnerabilities
-        run: npm audit --audit-level=moderate
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --audit-level=moderate
       - name: Reject tracked .env files and raw credential literals
         run: |
-          if git ls-files | grep -E '^\.env(\.|$)' | grep -v '^\.env\.example$'; then
+          if git ls-files | grep -E '(^|/)\.env(\.|$)' | grep -vE '(^|/)\.env\.example$'; then
             echo "Error: tracked .env file detected"
             exit 1
           fi
-          if git grep -En '(AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{20,}|sk_live_[0-9A-Za-z]{16,}|xox[baprs]-[0-9A-Za-z-]{10,}|BEGIN [A-Z ]*PRIVATE KEY)' -- ':!package-lock.json'; then
+          if git grep -En '(AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{20,}|sk_live_[0-9A-Za-z]{16,}|xox[baprs]-[0-9A-Za-z-]{10,}|BEGIN [A-Z ]*PRIVATE KEY)' -- ':!frontend/package-lock.json'; then
             echo "Error: raw secret-shaped literal detected in tracked files"
             exit 1
           fi
       - name: Verify client-only browser privacy boundaries
         run: |
-          if git grep -En 'localStorage|sessionStorage|dangerouslySetInnerHTML|innerHTML|XMLHttpRequest|Math\.random' -- 'src/'; then
-            echo "Error: disallowed browser storage, unsafe DOM, or non-crypto RNG found in src/"
+          if git grep -En 'localStorage|sessionStorage|dangerouslySetInnerHTML|innerHTML|XMLHttpRequest|Math\.random' -- 'frontend/src/'; then
+            echo "Error: disallowed browser storage, unsafe DOM, or non-crypto RNG found in frontend/src/"
             exit 1
           fi
